@@ -28,7 +28,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["nsis"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -36,11 +36,36 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "shortDescription": "本地优先的小说写作工具",
-    "longDescription": "墨匣是一款纯本地的极简小说写作 App：多书库、分卷章节树、Markdown 编辑器、实时双字数、手动/自动存档、MD/TXT/ZIP 导出、线格纸与密码锁，全部内容以 book.md 存在你自己的文件夹里。",
+    "shortDescription": "小说写作工具",
+    "longDescription": "纯本地的极简小说写作 App：多书库、分卷章节树、Markdown 编辑器、实时双字数、手动/自动存档、MD/TXT/ZIP 导出、线格纸与密码锁，全部内容以 book.md 存在你自己的文件夹里。",
     "android": {
       "minSdkVersion": 24
+    },
+    "windows": {
+      "nsis": {
+        "enabled": true,
+        "installMode": "both",
+        "languages": ["SimpChinese", "English"],
+        "displayLanguageSelector": true
+      },
+      "wix": {
+        "enabled": false
+      },
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      }
     }
   },
-  "plugins": {}
+  "plugins": {
+    "store": {},
+    "fs": {
+      "scope": {
+        "allow": [
+          "$DOCUMENT/*",
+          "$DESKTOP/*",
+          "$HOME/*"
+        ]
+      }
+    }
+  }
 }
