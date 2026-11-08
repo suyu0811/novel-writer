@@ -43,7 +43,7 @@
     },
     "windows": {
       "nsis": {
-        "languages": ["SChinese", "English"],
+        "languages": ["SimpChinese", "English"],
         "displayLanguageSelector": true
       },
       "webviewInstallMode": {
