@@ -154,20 +154,29 @@ async function remove(item: any) {
         </div>
 
         <div class="group-title">存储</div>
-        <div class="opt col" @click="changeRoot">
-          <div class="opt-text">
-            <div class="opt-label">文件存储根目录</div>
-            <div class="opt-hint path">{{ settings.rootDir || '未设置，使用默认文档目录' }}</div>
-          </div>
-          <button class="sheet-btn" @click.stop="changeRoot">更改</button>
-        </div>
-        <div class="opt col">
-          <div class="opt-text">
-            <div class="opt-label">书库索引</div>
-            <div class="opt-hint">共 {{ library.books.length }} 本，目录变化后可重新扫描</div>
-          </div>
-          <button class="sheet-btn" @click.stop="refreshLibrary">重新扫描</button>
-        </div>
+<div class="opt col" @click="changeRoot">
+  <div class="opt-text">
+    <div class="opt-label">文件存储根目录</div>
+    <div class="opt-hint path">{{ settings.rootDir || '未设置，使用默认文档目录' }}</div>
+  </div>
+  <button class="sheet-btn" @click.stop="changeRoot">更改</button>
+</div>
+<!-- 新增：默认导出目录 -->
+<div class="opt col" @click="pickExportDir">
+  <div class="opt-text">
+    <div class="opt-label">默认导出目录</div>
+    <div class="opt-hint path">{{ exportDir || '未设置，使用系统默认' }}</div>
+  </div>
+  <button class="sheet-btn" @click.stop="pickExportDir">更改</button>
+</div>
+<div class="opt col">
+  <div class="opt-text">
+    <div class="opt-label">书库索引</div>
+    <div class="opt-hint">共 {{ library.books.length }} 本，目录变化后可重新扫描</div>
+  </div>
+  <button class="sheet-btn" @click.stop="refreshLibrary">重新扫描</button>
+</div>
+
 
         <div class="group-title">外观</div>
         <div class="field">
