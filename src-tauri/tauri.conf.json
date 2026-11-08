@@ -43,13 +43,8 @@
     },
     "windows": {
       "nsis": {
-        "enabled": true,
-        "installMode": "both",
-        "languages": ["SimpChinese", "English"],
+        "languages": ["SChinese", "English"],
         "displayLanguageSelector": true
-      },
-      "wix": {
-        "enabled": false
       },
       "webviewInstallMode": {
         "type": "downloadBootstrapper"

@@ -2,6 +2,10 @@ use serde::Serialize;
 use std::fs;
 use std::path::Path;
 use tauri::Manager;
+use tauri_plugin_store;
+use tauri_plugin_dialog;
+use tauri_plugin_fs;
+
 
 #[derive(Serialize)]
 pub struct Entry {
@@ -40,8 +44,8 @@ fn fs_write_bytes(path: String, bytes: Vec<u8>) -> Result<(), String> {
 fn fs_read_head(path: String, bytes: usize) -> Result<String, String> {
     let mut file = fs::File::open(&path).map_err(|e| format!("读取失败 {path}: {e}"))?;
     let mut buf = vec![0u8; bytes.max(1)];
-    let n = std::io::Read::read(&mut file, &mut buf)
-        .map_err(|e| format!("读取失败 {path}: {e}"))?;
+    let n =
+        std::io::Read::read(&mut file, &mut buf).map_err(|e| format!("读取失败 {path}: {e}"))?;
     buf.truncate(n);
     Ok(String::from_utf8_lossy(&buf).to_string())
 }
@@ -111,9 +115,9 @@ fn app_version() -> String {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
-        .plugin(tauri_plugin_store::Builder::default().build())
         .invoke_handler(tauri::generate_handler![
             fs_read_text,
             fs_read_head,

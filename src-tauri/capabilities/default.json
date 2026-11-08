@@ -2,6 +2,12 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "墨匣默认权限：只用核心能力 + 文件选择对话框",
-  "windows": ["main"],
-  "permissions": ["core:default", "dialog:default"]
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:default",
+    "dialog:default",
+    "store:default"
+  ]
 }
