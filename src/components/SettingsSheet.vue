@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import {
   checkPassword,
   clearPassword,
@@ -12,10 +12,29 @@ import { loadLibrary, library, scanLibrary } from '../lib/library'
 import { archives, deleteArchive, restoreArchive } from '../lib/book'
 import { pickFolder } from '../lib/storage'
 import { confirmBox, promptBox, toast } from '../lib/ui'
+import { getDefaultExportDir, setDefaultExportDir } from '@/utils/exportDir'
 
 const emit = defineEmits<{ (e: 'close'): void }>()
 
 const accents = ['#8a6a4f', '#3f6f5b', '#4a5f8a', '#8a4a56', '#5b5468', '#2f2f2f']
+
+// 自定义取色
+const customAccent = ref(settings.accent)
+function applyCustomAccent() {
+  pickAccent(customAccent.value)
+}
+
+// 默认导出目录
+const exportDir = ref('')
+async function refreshExportPath() {
+  exportDir.value = await getDefaultExportDir()
+}
+async function pickExportDir() {
+  await setDefaultExportDir()
+  await refreshExportPath()
+}
+
+onMounted(refreshExportPath)
 
 function toggle(key: 'night' | 'showStatusbar' | 'indent' | 'ruled' | 'forceLandscape') {
   ;(settings as any)[key] = !(settings as any)[key]
@@ -154,29 +173,28 @@ async function remove(item: any) {
         </div>
 
         <div class="group-title">存储</div>
-<div class="opt col" @click="changeRoot">
-  <div class="opt-text">
-    <div class="opt-label">文件存储根目录</div>
-    <div class="opt-hint path">{{ settings.rootDir || '未设置，使用默认文档目录' }}</div>
-  </div>
-  <button class="sheet-btn" @click.stop="changeRoot">更改</button>
-</div>
-<!-- 新增：默认导出目录 -->
-<div class="opt col" @click="pickExportDir">
-  <div class="opt-text">
-    <div class="opt-label">默认导出目录</div>
-    <div class="opt-hint path">{{ exportDir || '未设置，使用系统默认' }}</div>
-  </div>
-  <button class="sheet-btn" @click.stop="pickExportDir">更改</button>
-</div>
-<div class="opt col">
-  <div class="opt-text">
-    <div class="opt-label">书库索引</div>
-    <div class="opt-hint">共 {{ library.books.length }} 本，目录变化后可重新扫描</div>
-  </div>
-  <button class="sheet-btn" @click.stop="refreshLibrary">重新扫描</button>
-</div>
-
+        <div class="opt col" @click="changeRoot">
+          <div class="opt-text">
+            <div class="opt-label">文件存储根目录</div>
+            <div class="opt-hint path">{{ settings.rootDir || '未设置，使用默认文档目录' }}</div>
+          </div>
+          <button class="sheet-btn" @click.stop="changeRoot">更改</button>
+        </div>
+        <!-- 新增：默认导出目录 -->
+        <div class="opt col" @click="pickExportDir">
+          <div class="opt-text">
+            <div class="opt-label">默认导出目录</div>
+            <div class="opt-hint path">{{ exportDir || '未设置，使用系统默认' }}</div>
+          </div>
+          <button class="sheet-btn" @click.stop="pickExportDir">更改</button>
+        </div>
+        <div class="opt col">
+          <div class="opt-text">
+            <div class="opt-label">书库索引</div>
+            <div class="opt-hint">共 {{ library.books.length }} 本，目录变化后可重新扫描</div>
+          </div>
+          <button class="sheet-btn" @click.stop="refreshLibrary">重新扫描</button>
+        </div>
 
         <div class="group-title">外观</div>
         <div class="field">
@@ -200,6 +218,16 @@ async function remove(item: any) {
               :style="{ background: c }"
               @click="pickAccent(c)"
             />
+            <!-- 自定义取色 -->
+            <label class="swatch custom-swatch" :style="{ background: customAccent }">
+              <input
+                type="color"
+                v-model="customAccent"
+                @input="applyCustomAccent"
+                style="opacity:0;position:absolute;width:100%;height:100%;cursor:pointer"
+              />
+              <span v-if="!accents.includes(settings.accent)" class="mark">✓</span>
+            </label>
           </div>
         </div>
         <div class="opt" @click="toggleSerif">
@@ -234,3 +262,17 @@ async function remove(item: any) {
     </div>
   </div>
 </template>
+<style scoped>
+.custom-swatch {
+  position: relative;
+  border: 1px dashed #aaa;
+}
+.custom-swatch .mark {
+  color: #fff;
+  text-shadow: 0 0 2px #000;
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+</style>
