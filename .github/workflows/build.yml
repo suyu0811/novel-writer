@@ -33,27 +33,26 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      # 缓存 Android SDK
       - name: Cache Android SDK
         uses: actions/cache@v4
         with:
           path: ${{ env.ANDROID_HOME }}
           key: android-sdk-v1-platform34-build34.0.0
 
-      # 下载 cmdline-tools + 使用阿里镜像
       - name: Install Android SDK
         run: |
           set -e
           mkdir -p $ANDROID_HOME/cmdline-tools
+          mkdir -p ~/.android
           cd $ANDROID_HOME/cmdline-tools
           wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
           unzip -q commandlinetools-linux-11076708_latest.zip
           mv cmdline-tools latest
           export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
-          # 使用阿里镜像
-          echo "sdkmanager.sdk=https://mirrors.aliyun.com/android/android/repository" > ~/.android/sdkmanager.cfg
+          # 阿里镜像源
+          export SDK_MANAGER_OPTS="--repository=https://mirrors.aliyun.com/android/android/repository"
           yes | sdkmanager --licenses
-          yes | sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+          yes | sdkmanager $SDK_MANAGER_OPTS "platform-tools" "platforms;android-34" "build-tools;34.0.0"
           echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
           echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
 
@@ -65,12 +64,15 @@ jobs:
       - name: 安装依赖
         run: npm install
 
-      # 【重点】把 gradle 源替换成阿里云，不然编译阶段还会炸
       - name: Patch Gradle mirror
         run: |
-          GRADLE_PROPS="src-tauri/gen/android/build.gradle"
-          if [ -f "$GRADLE_PROPS" ]; then
-            sed -i 's/maven { url "https:\/\/maven.google.com" }/maven { url "https:\/\/maven.aliyun.com\/repository\/google" }/g' "$GRADLE_PROPS"
+          GRADLE_FILE="src-tauri/gen/android/build.gradle"
+          SETTINGS_FILE="src-tauri/gen/android/settings.gradle"
+          if [ -f "$GRADLE_FILE" ]; then
+            sed -i 's/maven { url "https:\/\/maven.google.com" }/maven { url "https:\/\/maven.aliyun.com\/repository\/google" }/g' "$GRADLE_FILE"
+          fi
+          if [ -f "$SETTINGS_FILE" ]; then
+            sed -i 's/maven { url "https:\/\/maven.google.com" }/maven { url "https:\/\/maven.aliyun.com\/repository\/google" }/g' "$SETTINGS_FILE"
           fi
 
       - name: 编译 arm64 APK
