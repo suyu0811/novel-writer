@@ -391,15 +391,18 @@ export async function deleteArchive(item: ArchiveItem) {
 export async function pickAndImport() {
   const file = await pickFile()
   if (!file) return
+  
   const text = await readText(file)
-  const guess = file.replace(/^.*[\\/]/, '').replace(/\.(md|markdown|txt)$/i, '')
+  const guess = file.split('/').pop()?.replace(/\.(md|markdown|txt)$/i, '') || '未命名'
   const preview = parseBook(text, guess)
+  
   const total = preview.volumes.reduce((n, v) => n + v.chapters.length, 0)
   const ok = await confirmBox(
     '导入书稿',
     `识别到《${preview.title}》共 ${preview.volumes.length} 卷、${total} 章。\n导入后会作为一本新书出现在书库根目录里，保留原有分卷 / 章节结构。`
   )
   if (!ok) return
+  
   const meta = await importAsBook(text, guess)
   if (!meta) {
     toast('导入失败')
@@ -429,34 +432,22 @@ async function doExport(b: Book, kind: ExportKind) {
   const stem = safeName(b.title)
   const ext = `.${kind}`
   
-  let path = ''
-
-  // ★ 修复：使用 userAgent 判断是否在移动端，无需引入 plugin-os
-  const isMobile = /android|iphone|ipad|ipod/i.test(navigator.userAgent)
-
-  if (isMobile) {
-    // 安卓/iOS：静默保存在当前书库的所在目录下的“导出”文件夹
-    const exportDir = joinPath(library.root, '导出')
-    await mkdir(exportDir)
-    path = joinPath(exportDir, stem + ext)
-    toast('正在导出到书库根目录的“导出”文件夹...')
-  } else {
-    // Windows / Mac：依然使用系统弹窗，允许自由选择
-    const defaultDir = await getDefaultExportDir()
-    let defaultPath = stem + ext
-    if (defaultDir) {
-      const sep = defaultDir.includes('\\') ? '\\' : '/'
-      defaultPath = defaultDir.replace(/[\\/]$/, '') + sep + stem + ext
-    }
-    const savePath = await save({
-      defaultPath: defaultPath,
-      filters: [{ name: kind.toUpperCase(), extensions: [kind] }]
-    })
-    if (!savePath) return
-    path = savePath
+  const defaultDir = await getDefaultExportDir()
+  let defaultPath = stem + ext
+  // Windows 下默认带出设置里的路径，手机由于 SAF 机制会自动让用户选
+  if (defaultDir && !/android|iphone|ipad/i.test(navigator.userAgent)) {
+    const sep = defaultDir.includes('\\') ? '\\' : '/'
+    defaultPath = defaultDir.replace(/[\\/]$/, '') + sep + stem + ext
   }
 
-  // 写入文件
+  // 唤起系统保存弹窗（全平台通用）
+  const path = await save({
+    defaultPath: defaultPath,
+    filters: [{ name: kind.toUpperCase(), extensions: [kind] }]
+  })
+
+  if (!path) return // 用户取消了
+
   if (kind === 'md') {
     await writeText(path, serializeBook(b))
   } else if (kind === 'txt') {
@@ -489,5 +480,5 @@ async function doExport(b: Book, kind: ExportKind) {
     await writeBytes(path, zipSync(files, { level: 6 }))
   }
   
-  toast(`已导出到：${path}`)
+  toast(`已成功导出`)
 }
