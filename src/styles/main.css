@@ -12,9 +12,7 @@
   --shadow: 0 8px 30px rgba(40, 32, 24, 0.14);
   --editor-size: 17px;
   --editor-lh: 1.9;
-  /* 自定义字体变量，初始为空 */
   --editor-custom-font: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
-  /* 计算每行的高度，用于横格纸和行距 */
   --line-h: calc(var(--editor-size) * var(--editor-lh));
   --panel-w: 268px;
 }
@@ -236,7 +234,6 @@ textarea {
   color: var(--accent);
 }
 
-/* 设置与书籍列表之间的划线 */
 .panel-sep {
   height: 1px;
   background: var(--line);
@@ -490,30 +487,46 @@ html:not(.indent) .Ep .ProseMirror p {
 }
 
 /* =======================================================
-   ★ 终极修复：线格纸完美适配字体，不再穿模错位
+   ★ 终极稿纸：段落级铺线（折行有线，回车空行有线，文末干净）
    ======================================================= */
+/* 1. 移除最外层全屏画线，保证文末干净 */
 html.ruled .Ep .ProseMirror {
-  background-image: none !important; /* 移除原有的背景画线 */
+  background-image: none !important;
 }
 
+/* 2. 针对每一个段落内部无限铺线 */
 html.ruled .Ep .ProseMirror p {
-  margin: 0;
+  margin: 0 !important; /* 取消段落间距，保证上下线绝对等距 */
+  padding: 0 !important;
   line-height: var(--line-h) !important;
-  border-bottom: 1px solid var(--rule) !important; /* 直接给段落底部画线 */
-  box-sizing: border-box;
+  
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0px,
+    transparent calc(var(--line-h) - 1px),
+    var(--rule) calc(var(--line-h) - 1px),
+    var(--rule) var(--line-h)
+  ) !important;
+  background-size: 100% var(--line-h) !important;
+  background-position: 0 0 !important;
 }
 
+/* 3. 列表项特殊处理，防止缩进错位 */
 html.ruled .Ep .ProseMirror li p {
-  margin: 0;
-  line-height: var(--line-h) !important;
-  border-bottom: none !important;
+  background-image: none !important;
+  margin: 0 !important;
 }
-
 html.ruled .Ep .ProseMirror li {
   line-height: var(--line-h) !important;
-  border-bottom: 1px solid var(--rule) !important;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0px,
+    transparent calc(var(--line-h) - 1px),
+    var(--rule) calc(var(--line-h) - 1px),
+    var(--rule) var(--line-h)
+  ) !important;
+  background-size: 100% var(--line-h) !important;
 }
-
 /* ======================================================= */
 
 .Ep .ProseMirror p.is-editor-empty:first-child::before {
