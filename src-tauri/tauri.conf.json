@@ -44,23 +44,16 @@
     "windows": {
       "nsis": {
         "languages": ["SimpChinese", "English"],
-        "displayLanguageSelector": true
+        "displayLanguageSelector": false,
+        "installMode": "currentUser"
       },
       "webviewInstallMode": {
-        "type": "downloadBootstrapper"
+        "type": "downloadBootstrapper",
+        "silent": true
       }
     }
   },
   "plugins": {
-    "store": {},
-    "fs": {
-      "scope": {
-        "allow": [
-          "$DOCUMENT/*",
-          "$DESKTOP/*",
-          "$HOME/*"
-        ]
-      }
-    }
+    "dialog": {}
   }
 }
