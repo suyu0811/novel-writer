@@ -42,18 +42,16 @@
       "minSdkVersion": 24
     },
     "windows": {
-      "nsis": {
-        "languages": ["SimpChinese", "English"],
-        "displayLanguageSelector": false,
-        "installMode": "currentUser"
-      },
       "webviewInstallMode": {
         "type": "downloadBootstrapper",
         "silent": true
+      },
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": ["SimpChinese", "English"],
+        "displayLanguageSelector": false
       }
     }
   },
-  "plugins": {
-    "dialog": {}
-  }
+  "plugins": {}
 }
