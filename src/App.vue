@@ -14,8 +14,13 @@ const panelOpen = ref(window.innerWidth > 760)
 const showSettings = ref(false)
 const locked = ref(false)
 const mobile = ref(window.innerWidth <= 760)
+const appName = ref('墨匣') // ★ 新增：动态软件名
 
 let archiveTimer: any = 0
+
+function updateAppName() {
+  appName.value = localStorage.getItem('app_display_name') || '墨匣'
+}
 
 function syncViewport() {
   mobile.value = window.innerWidth <= 760
@@ -29,6 +34,11 @@ function togglePanel() {
 function toggleNight() {
   settings.night = !settings.night
   saveSettings()
+}
+
+function closeSettings() {
+  showSettings.value = false
+  updateAppName() // 关闭设置时刷新名字
 }
 
 function openExport() {
@@ -100,6 +110,7 @@ async function onUnlocked() {
 
 onMounted(async () => {
   loadSettings()
+  updateAppName() // 初始化读取名字
   syncViewport()
   await loadLibrary()
   if (hasPassword()) {
@@ -125,7 +136,7 @@ onBeforeUnmount(() => {
   <div class="shell" :class="{ rotated: screen.rotated }">
     <header class="topbar">
       <button class="icon-btn" title="书库面板" @click="togglePanel">☰</button>
-      <div class="title">{{ app.book?.title || '墨匣' }}</div>
+      <div class="title">{{ app.book?.title || appName }}</div>
       <span class="grow" />
       <button class="icon-btn" title="手动存档（保存并清理自动存档）" @click="doArchive">⤓</button>
       <button class="icon-btn" title="导出全书" @click="openExport">⇪</button>
@@ -151,7 +162,7 @@ onBeforeUnmount(() => {
       </main>
     </div>
 
-    <SettingsSheet v-if="showSettings" @close="showSettings = false" />
+    <SettingsSheet v-if="showSettings" @close="closeSettings" />
     <ModalHost />
 
     <!-- 手机端：从左边往右滑打开面板 -->
