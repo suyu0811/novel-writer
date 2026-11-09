@@ -92,12 +92,12 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - uses: android-actions/setup-android@v3
-        with:
-          packages: |
-            platform-tools
-            platforms;android-34
-            build-tools;34.0.0
+      # GitHub Ubuntu runner 自带 Android SDK，我们直接用，不调用容易崩的 setup-android
+      - name: 配置 Android SDK
+        run: |
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          yes | sdkmanager --install "platforms;android-34" "build-tools;34.0.0" "platform-tools"
 
       - uses: nttld/setup-ndk@v1
         with:
