@@ -21,7 +21,7 @@ export interface Settings {
   fontSize: number
   lineHeight: number
   serif: boolean
-  drawerFontSize: number // ★ 新增：设定集抽屉字号
+  drawerFontSize: number // 设定集抽屉字号
 }
 
 const KEY = 'mw.settings.v2'
@@ -39,7 +39,7 @@ const DEFAULTS: Settings = {
   fontSize: 17,
   lineHeight: 1.9,
   serif: false,
-  drawerFontSize: 14 // ★ 新增：默认字号 14
+  drawerFontSize: 14
 }
 
 export const settings = reactive<Settings>({ ...DEFAULTS })
@@ -57,7 +57,6 @@ export function loadSettings() {
   settings.fontSize = Number(settings.fontSize) || DEFAULTS.fontSize
   settings.lineHeight = Number(settings.lineHeight) || DEFAULTS.lineHeight
   settings.accent = settings.accent || DEFAULTS.accent
-  // ★ 新增：确保抽屉字号是数字
   settings.drawerFontSize = Number(settings.drawerFontSize) || DEFAULTS.drawerFontSize
   if (!settings.rootDir) settings.rootDir = ''
   settings.passwordEnabled = !!settings.passwordEnabled
@@ -77,6 +76,11 @@ export function applySettings() {
   root.style.setProperty('--accent', settings.accent)
   root.style.setProperty('--editor-size', settings.fontSize + 'px')
   root.style.setProperty('--editor-lh', String(settings.lineHeight))
+  
+  // ★ 核心修复：强制算出无小数点的整数像素，专治安卓不显示下划线
+  const exactLineHeight = Math.round(settings.fontSize * settings.lineHeight)
+  root.style.setProperty('--line-h-px', exactLineHeight + 'px')
+
   root.style.setProperty(
     '--editor-family',
     settings.serif

@@ -14,6 +14,7 @@
   --editor-lh: 1.9;
   --editor-custom-font: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
   --line-h: calc(var(--editor-size) * var(--editor-lh));
+  --line-h-px: 32px; /* 默认占位，会被 js 动态替换 */
   --panel-w: 268px;
 }
 
@@ -133,7 +134,6 @@ textarea {
   overflow: hidden;
 }
 
-/* 强制横屏：竖屏时把整个界面旋转 90° */
 .shell.rotated {
   position: fixed;
   top: 0;
@@ -487,35 +487,34 @@ html:not(.indent) .Ep .ProseMirror p {
 }
 
 /* =======================================================
-   ★ 终极兼容版稿纸：完美避开安卓 WebView 的兼容性 Bug
+   ★ 终极笔记本效果：无分段、无小数、自动折行、连贯不断
    ======================================================= */
-/* 1. 移除最外层全屏画线，保证文末干净 */
+/* 1. 让外层编辑器透明，避免文末全屏铺线 */
 html.ruled .Ep .ProseMirror {
   background-image: none !important;
 }
 
-/* 2. 针对每一个段落内部铺线 */
+/* 2. 给每个段落铺线，只有有字的地方才铺 */
 html.ruled .Ep .ProseMirror p {
-  margin: 0 !important; /* 取消段落间距，保证上下线绝对等距 */
+  margin: 0 !important; 
   padding: 0 !important;
-  line-height: var(--line-h) !important;
+  line-height: var(--line-h-px) !important;
   
-  /* ★ 核心修改：用 linear-gradient 画底部单线，然后用 repeat-y 纵向平铺 */
-  background-image: linear-gradient(to bottom, transparent calc(100% - 1px), var(--rule) 100%) !important;
-  background-size: 100% var(--line-h) !important;
+  /* 使用最稳固的基础画线法，且使用绝对整数像素 */
+  background-image: linear-gradient(to bottom, transparent calc(var(--line-h-px) - 1px), var(--rule) 100%) !important;
+  background-size: 100% var(--line-h-px) !important;
   background-repeat: repeat-y !important;
-  background-position: 0 0 !important;
 }
 
-/* 3. 列表项特殊处理，防止缩进错位 */
+/* 3. 列表适配，防止点点错位 */
 html.ruled .Ep .ProseMirror li p {
   background-image: none !important;
   margin: 0 !important;
 }
 html.ruled .Ep .ProseMirror li {
-  line-height: var(--line-h) !important;
-  background-image: linear-gradient(to bottom, transparent calc(100% - 1px), var(--rule) 100%) !important;
-  background-size: 100% var(--line-h) !important;
+  line-height: var(--line-h-px) !important;
+  background-image: linear-gradient(to bottom, transparent calc(var(--line-h-px) - 1px), var(--rule) 100%) !important;
+  background-size: 100% var(--line-h-px) !important;
   background-repeat: repeat-y !important;
 }
 /* ======================================================= */

@@ -5,7 +5,6 @@ on:
   push:
     branches: [main]
 
-# 自动取消旧的构建，只跑最新一次
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -33,14 +32,9 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: 动态探测并配置 Android NDK 环境变量
+      - name: 探测 NDK
         run: |
           NDK_DIR=$(ls -d $ANDROID_HOME/ndk/* | head -n 1)
-          if [ -z "$NDK_DIR" ]; then
-            echo "错误：未在机器上找到自带的 NDK！"
-            exit 1
-          fi
-          echo "探测到 NDK 路径为: $NDK_DIR"
           echo "NDK_HOME=$NDK_DIR" >> $GITHUB_ENV
           echo "ANDROID_NDK_HOME=$NDK_DIR" >> $GITHUB_ENV
 
@@ -49,7 +43,7 @@ jobs:
           npm install
           npm install @tauri-apps/plugin-fs @tauri-apps/plugin-dialog @tauri-apps/plugin-store
 
-      - name: Init Android 工程并赋权
+      - name: 编译 Android
         run: |
           npx tauri android init --ci
           chmod +x src-tauri/gen/android/gradlew
@@ -57,9 +51,6 @@ jobs:
           if [ -f "$BUILD_GRADLE" ]; then
             sed -i 's/abiFilters .*$/abiFilters "arm64-v8a"/g' "$BUILD_GRADLE"
           fi
-
-      - name: Patch Gradle 阿里镜像
-        run: |
           SETTINGS_FILE="src-tauri/gen/android/settings.gradle"
           BUILD_FILE="src-tauri/gen/android/build.gradle"
           for f in "$SETTINGS_FILE" "$BUILD_FILE"; do
@@ -67,9 +58,7 @@ jobs:
             sed -i "s/google()/maven { url 'https:\/\/maven.aliyun.com\/repository\/google' }/g" "$f"
             sed -i "s/mavenCentral()/maven { url 'https:\/\/maven.aliyun.com\/repository\/public' }/g" "$f"
           done
-
-      - name: 编译 Android APK
-        run: npx tauri android build --apk --target aarch64
+          npx tauri android build --apk --target aarch64
 
       - name: 准备签名
         env:
@@ -92,16 +81,15 @@ jobs:
           "$BT/zipalign" -f -p 4 "$UNSIGNED" "$RUNNER_TEMP/aligned.apk"
           "$BT/apksigner" sign --ks "$RUNNER_TEMP/release.keystore" --ks-pass "pass:$KS_PASS" --key-pass "pass:$KS_PASS" --out "${{ env.APP_NAME }}-Android.apk" "$RUNNER_TEMP/aligned.apk"
 
-      # ★ 将安卓包上传到统一命名的 Artifact
-      - name: 上传安装包
+      # ★ 修改了这里，生成的 ZIP 包名为：墨匣-安卓版-APK.zip
+      - name: 上传 Android 包
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.APP_NAME }}-全平台安装包
+          name: ${{ env.APP_NAME }}-安卓版-APK
           path: ${{ env.APP_NAME }}-Android.apk
           if-no-files-found: error
 
-
-  # ================= Windows (EXE) 打包 =================
+  # ================= Windows (exe) 打包 =================
   build-windows:
     name: 打包 Windows EXE
     runs-on: windows-latest
@@ -119,14 +107,13 @@ jobs:
           npm install
           npm install @tauri-apps/plugin-fs @tauri-apps/plugin-dialog @tauri-apps/plugin-store
 
-      - name: 编译 Windows EXE
+      - name: 编译 Windows
         run: npx tauri build
 
-      # ★ 将 Windows 包上传到同一个 Artifact 名字中（会自动合并）
-      - name: 上传安装包
+      # ★ 修改了这里，生成的 ZIP 包名为：墨匣-Windows版-EXE.zip
+      - name: 上传 Windows 包
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.APP_NAME }}-全平台安装包
-          # 匹配 nsis 目录下的 exe 安装程序（如果你需要绿色版，可以改为 path: src-tauri/target/release/*.exe）
+          name: ${{ env.APP_NAME }}-Windows版-EXE
           path: src-tauri/target/release/bundle/nsis/*.exe
           if-no-files-found: error
