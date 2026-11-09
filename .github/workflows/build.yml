@@ -19,9 +19,10 @@ jobs:
           node-version: 22
           cache: npm
 
+      # 补全所有的安卓 Rust 目标，防止 Gradle 尝试编译其他架构时报错
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-linux-android
+          targets: aarch64-linux-android, armv7-linux-androideabi, i686-linux-android, x86_64-linux-android
 
       - uses: swatinem/rust-cache@v2
 
@@ -46,8 +47,11 @@ jobs:
       - name: 安装依赖
         run: npm install
 
-      - name: Init Android 工程
-        run: npx tauri android init --ci
+      # 赋予 gradlew 执行权限
+      - name: Init Android 工程并赋权
+        run: |
+          npx tauri android init --ci
+          chmod +x src-tauri/gen/android/gradlew
 
       - name: Patch Gradle 阿里镜像
         run: |
