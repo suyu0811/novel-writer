@@ -8,8 +8,7 @@ env:
   APP_NAME: 墨匣
   ANDROID_HOME: ${{ github.workspace }}/android-sdk
   ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
-  NDK_HOME: ${{ github.workspace }}/android-sdk/ndk/27.1.12297006
-  ANDROID_NDK_HOME: ${{ github.workspace }}/android-sdk/ndk/27.1.12297006
+  NDK_HOME: ${{ github.workspace }}/android-sdk/ndk/26.1.10909125
 
 jobs:
   android:
@@ -35,11 +34,19 @@ jobs:
           java-version: "17"
 
       # 使用官方维护的 android action，避开手写 yes 管道
-      - name: Setup Android SDK
+      - name: Setup Android SDK (Base)
         uses: android-actions/setup-android@v3
         with:
           packages: "platform-tools,platforms;android-34,build-tools;34.0.0"
 
+      - name: Install NDK
+        run: |
+          echo "Installing NDK 26.1.10909125..."
+          # 使用 yes 自动接受许可协议
+          yes | sdkmanager --install "ndk;26.1.10909125" || true
+          # 确认 NDK 是否安装成功
+          ls -la $ANDROID_HOME/ndk
+          
       - name: 安装依赖
         run: npm install
 
@@ -50,13 +57,13 @@ jobs:
         run: |
           SETTINGS_FILE="src-tauri/gen/android/settings.gradle"
           BUILD_FILE="src-tauri/gen/android/build.gradle"
-          # Tauri 模板里是 google() / mavenCentral() 简写，不是完整 URL
           for f in "$SETTINGS_FILE" "$BUILD_FILE"; do
             [ -f "$f" ] || continue
+            # Tauri 2 生成的通常是 google() 和 mavenCentral() 简写
             sed -i "s/google()/maven { url 'https:\/\/maven.aliyun.com\/repository\/google' }/g" "$f"
             sed -i "s/mavenCentral()/maven { url 'https:\/\/maven.aliyun.com\/repository\/public' }/g" "$f"
           done
-          # 顺手把 Gradle wrapper 指到腾讯镜像，避免下载 Gradle 发行版崩溃
+          # 顺手把 Gradle wrapper 指到腾讯镜像
           WRAPPER="src-tauri/gen/android/gradle/wrapper/gradle-wrapper.properties"
           if [ -f "$WRAPPER" ]; then
             sed -i 's#distributionUrl=.*#distributionUrl=https\\://mirrors.cloud.tencent.com/gradle/gradle-8.9-bin.zip#' "$WRAPPER"
