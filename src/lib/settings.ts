@@ -21,6 +21,7 @@ export interface Settings {
   fontSize: number
   lineHeight: number
   serif: boolean
+  drawerFontSize: number // ★ 新增：设定集抽屉字号
 }
 
 const KEY = 'mw.settings.v2'
@@ -37,7 +38,8 @@ const DEFAULTS: Settings = {
   accent: '#8a6a4f',
   fontSize: 17,
   lineHeight: 1.9,
-  serif: false
+  serif: false,
+  drawerFontSize: 14 // ★ 新增：默认字号 14
 }
 
 export const settings = reactive<Settings>({ ...DEFAULTS })
@@ -55,6 +57,8 @@ export function loadSettings() {
   settings.fontSize = Number(settings.fontSize) || DEFAULTS.fontSize
   settings.lineHeight = Number(settings.lineHeight) || DEFAULTS.lineHeight
   settings.accent = settings.accent || DEFAULTS.accent
+  // ★ 新增：确保抽屉字号是数字
+  settings.drawerFontSize = Number(settings.drawerFontSize) || DEFAULTS.drawerFontSize
   if (!settings.rootDir) settings.rootDir = ''
   settings.passwordEnabled = !!settings.passwordEnabled
   applySettings()
@@ -106,7 +110,6 @@ function readSecurity(): Security | null {
 }
 
 async function digest(text: string): Promise<string> {
-  // 优先用 WebCrypto；极少数老 webview 没有 subtle 时退化到轻量哈希
   if (window.crypto?.subtle) {
     const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))
     return Array.from(new Uint8Array(buf))

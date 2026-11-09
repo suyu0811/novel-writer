@@ -9,6 +9,7 @@ export interface Volume {
   id: string
   title: string
   chapters: Chapter[]
+  isSetting?: boolean // ★ 新增：是否为设定集卷
 }
 
 export interface Book {

@@ -18,7 +18,7 @@ import {
   writeText
 } from './storage'
 import { importAsBook, library, safeName, scanLibrary } from './library'
-import { confirmBox, toast } from './ui'
+import { confirmBox, promptBox, toast } from './ui' // ★ 新增 promptBox
 
 export const app = reactive({
   book: null as Book | null,
@@ -299,6 +299,50 @@ export function moveVolume(fromIndex: number, toIndex: number) {
   scheduleSave()
 }
 
+/* ------------------------- 设定集与替换 ------------------------- */
+
+// ★ 切换设定集卷
+export function toggleSettingVolume(vol: Volume) {
+  vol.isSetting = !vol.isSetting
+  scheduleSave()
+  toast(vol.isSetting ? '已设为设定集卷' : '已取消设定集')
+}
+
+// ★ 全书替换（跳过设定集卷）
+export async function replaceInBook() {
+  const b = app.book
+  if (!b) return
+  
+  const findStr = await promptBox('全书替换', '', '请输入要查找的词')
+  if (!findStr) return
+  const replaceStr = await promptBox('全书替换', '', `将「${findStr}」替换为：`)
+  if (replaceStr === null) return // 允许替换为空
+
+  let count = 0
+  // 遍历所有卷
+  for (const v of b.volumes) {
+    if (v.isSetting) continue // ★ 跳过设定集
+    for (const c of v.chapters) {
+      const oldContent = c.content
+      // 全局替换（转义正则特殊字符）
+      const regex = new RegExp(findStr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')
+      c.content = c.content.replace(regex, replaceStr)
+      if (c.content !== oldContent) {
+        count++
+        app.words[c.id] = countWords(c.content)
+      }
+    }
+  }
+  
+  if (count > 0) {
+    app.rev++ // 触发编辑器重绘
+    scheduleSave()
+    toast(`替换完成，涉及 ${count} 个章节`)
+  } else {
+    toast('未找到匹配内容')
+  }
+}
+
 /* ------------------------- 存档 ------------------------- */
 
 function archDirOf(book: Book): string {
@@ -434,28 +478,33 @@ async function doExport(b: Book, kind: ExportKind) {
   
   const defaultDir = await getDefaultExportDir()
   let defaultPath = stem + ext
-  // Windows 下默认带出设置里的路径，手机由于 SAF 机制会自动让用户选
   if (defaultDir && !/android|iphone|ipad/i.test(navigator.userAgent)) {
     const sep = defaultDir.includes('\\') ? '\\' : '/'
     defaultPath = defaultDir.replace(/[\\/]$/, '') + sep + stem + ext
   }
 
-  // 唤起系统保存弹窗（全平台通用）
   const path = await save({
     defaultPath: defaultPath,
     filters: [{ name: kind.toUpperCase(), extensions: [kind] }]
   })
 
-  if (!path) return // 用户取消了
+  if (!path) return 
+
+  // ★ 核心：导出前的数据过滤
+  const exportBookData = { ...b }
+  if (kind === 'txt') {
+    // txt 剔除设定集卷
+    exportBookData.volumes = b.volumes.filter(v => !v.isSetting)
+  }
 
   if (kind === 'md') {
-    await writeText(path, serializeBook(b))
+    await writeText(path, serializeBook(b)) // MD 全保留
   } else if (kind === 'txt') {
-    await writeText(path, toPlainText(b))
+    await writeText(path, toPlainText(exportBookData)) // TXT 用过滤后的
   } else {
     const files: Record<string, Uint8Array> = {}
     files[`${stem}.md`] = strToU8(serializeBook(b))
-    files[`${stem}.txt`] = strToU8(toPlainText(b))
+    files[`${stem}.txt`] = strToU8(toPlainText(exportBookData))
     files['book.json'] = strToU8(
       JSON.stringify(
         {
@@ -463,6 +512,7 @@ async function doExport(b: Book, kind: ExportKind) {
           author: b.author,
           volumes: b.volumes.map((v) => ({
             title: v.title,
+            isSetting: v.isSetting, // ★ 记住设定集状态
             chapters: v.chapters.map((c) => ({ title: c.title, content: c.content }))
           }))
         },

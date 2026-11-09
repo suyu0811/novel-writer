@@ -10,7 +10,8 @@ import {
   findChapter,
   renameChapter,
   setContent,
-  totalWords
+  totalWords,
+  replaceInBook // ★ 引入替换方法
 } from '../lib/book'
 import { docToMd, mdToHtml } from '../lib/richtext'
 import { promptBox, toast } from '../lib/ui'
@@ -20,6 +21,12 @@ const editor = shallowRef<Editor | null>(null)
 const tick = ref(0)
 const mountEl = ref<HTMLElement | null>(null)
 let internal = false
+
+// ★ 抽屉状态
+const showDrawer = ref(false)
+const activeDrawerChapterId = ref(localStorage.getItem('drawerActiveChapter') || '')
+const drawerScrollTop = ref(0)
+const drawerBodyEl = ref<HTMLElement | null>(null)
 
 const extensions = [
   StarterKit.configure({
@@ -121,7 +128,7 @@ async function editTitle() {
   if (name) renameChapter(ch, name)
 }
 
-// ★ 安全的一键排版
+// ★ 安全排版（保留你之前的要求）
 function oneClickFormat() {
   const e = editor.value
   if (!e) return
@@ -151,13 +158,12 @@ function oneClickFormat() {
       settings.indent = false
       saveSettings()
     }
-    toast('排版完成：已添加实际缩进字符')
+    toast('排版完成')
   } else {
-    toast('文本已是标准排版状态')
+    toast('已是标准排版')
   }
 }
 
-// ★ 安全的一键清除缩进
 function clearIndent() {
   const e = editor.value
   if (!e) return
@@ -181,10 +187,45 @@ function clearIndent() {
       tr.replaceWith(t.from, t.to, state.schema.text(t.text))
     })
     view.dispatch(tr)
-    toast('已清除段首缩进字符')
+    toast('已清除段首缩进')
   } else {
     toast('没有需要清除的缩进')
   }
+}
+
+// ★ 抽屉逻辑
+const settingVolumes = computed(() => {
+  if (!app.book) return []
+  return app.book.volumes.filter(v => v.isSetting)
+})
+
+const activeDrawerChapter = computed(() => {
+  return findChapter(activeDrawerChapterId.value)
+})
+
+const drawerHtml = computed(() => {
+  if (!activeDrawerChapter.value) return ''
+  return mdToHtml(activeDrawerChapter.value.content)
+})
+
+function toggleDrawer() {
+  showDrawer.value = !showDrawer.value
+  if (showDrawer.value && drawerBodyEl.value) {
+    // 恢复上次的滚动位置
+    setTimeout(() => {
+      if (drawerBodyEl.value) drawerBodyEl.value.scrollTop = drawerScrollTop.value
+    }, 50)
+  }
+}
+
+function onDrawerScroll(e: Event) {
+  drawerScrollTop.value = (e.target as HTMLElement).scrollTop
+}
+
+function selectDrawerChapter(id: string) {
+  activeDrawerChapterId.value = id
+  localStorage.setItem('drawerActiveChapter', id)
+  drawerScrollTop.value = 0 // 切换章节重置滚动
 }
 </script>
 
@@ -193,25 +234,26 @@ function clearIndent() {
     <div class="empty-logo">墨</div>
     <h2>墨匣</h2>
     <p>纯本地的小说写作台 · 不联网 · 不登录</p>
-    <p class="dim">在左侧「书籍管理」里点 ＋ 新建，或用「导入」读入 md / txt</p>
   </div>
 
-  <div v-else class="editor-wrap">
+  <div v-else class="editor-wrap" style="position: relative;">
     <div class="toolbar">
       <button class="icon-btn" :class="{ on: isOn('bold') }" title="加粗" @click="run((e) => e.chain().focus().toggleBold().run())"><b>B</b></button>
       <button class="icon-btn" :class="{ on: isOn('italic') }" title="斜体" @click="run((e) => e.chain().focus().toggleItalic().run())"><i>I</i></button>
       <button class="icon-btn" :class="{ on: isOn('strike') }" title="删除线" @click="run((e) => e.chain().focus().toggleStrike().run())"><s>S</s></button>
       <span class="sep" />
-      <button class="icon-btn" :class="{ on: isOn('bulletList') }" title="无序列表" @click="run((e) => e.chain().focus().toggleBulletList().run())">☰</button>
-      <button class="icon-btn" :class="{ on: isOn('orderedList') }" title="有序列表" @click="run((e) => e.chain().focus().toggleOrderedList().run())">1.</button>
-      <button class="icon-btn" :class="{ on: isOn('blockquote') }" title="引用" @click="run((e) => e.chain().focus().toggleBlockquote().run())">❝</button>
-      <button class="icon-btn" title="分割线" @click="run((e) => e.chain().focus().setHorizontalRule().run())">—</button>
-      <span class="sep" />
       <button class="icon-btn" title="一键排版" @click="oneClickFormat">排版</button>
       <button class="icon-btn" title="一键清除首行缩进" @click="clearIndent">除缩进</button>
       <span class="sep" />
+      <!-- ★ 新增：全书替换 -->
+      <button class="icon-btn" title="全书替换" @click="replaceInBook">替换</button>
+      <span class="sep" />
       <button class="icon-btn" title="撤销" @click="run((e) => e.chain().focus().undo().run())">↺</button>
       <button class="icon-btn" title="重做" @click="run((e) => e.chain().focus().redo().run())">↻</button>
+      
+      <span class="grow" />
+      <!-- ★ 新增：抽屉呼出按钮 -->
+      <button class="icon-btn" :class="{ on: showDrawer }" title="呼出设定集" @click="toggleDrawer">📖</button>
     </div>
 
     <div class="chap-head">
@@ -230,12 +272,91 @@ function clearIndent() {
       </div>
     </div>
 
+    <!-- ★ 右侧抽屉 -->
+    <transition name="slide">
+      <div v-if="showDrawer" class="drawer-panel">
+        <div class="drawer-head">
+          <select v-model="activeDrawerChapterId" @change="selectDrawerChapter(activeDrawerChapterId)" class="drawer-select">
+            <option value="" disabled>选择设定章节</option>
+            <template v-for="vol in settingVolumes" :key="vol.id">
+              <optgroup :label="vol.title">
+                <option v-for="ch in vol.chapters" :key="ch.id" :value="ch.id">
+                  {{ ch.title }}
+                </option>
+              </optgroup>
+            </template>
+          </select>
+          <button class="icon-btn" @click="showDrawer = false">✕</button>
+        </div>
+        <div class="drawer-body" ref="drawerBodyEl" @scroll="onDrawerScroll" :style="{ fontSize: settings.drawerFontSize + 'px' }">
+          <div v-if="!activeDrawerChapter" class="tip" style="text-align: center; margin-top: 40px;">
+            暂无设定或未选择
+          </div>
+          <div v-else class="drawer-content" v-html="drawerHtml"></div>
+        </div>
+      </div>
+    </transition>
+
     <div v-if="settings.showStatusbar" class="statusbar">
       <span>{{ app.book.title }}</span>
       <span class="grow" />
       <span v-if="app.dirty">未保存</span>
-      <span v-else-if="app.saving">保存中…</span>
       <span v-else>已保存</span>
     </div>
   </div>
 </template>
+
+<style scoped>
+/* 抽屉样式 */
+.drawer-panel {
+  position: absolute;
+  right: 0;
+  top: 40px; /* 避开工具栏 */
+  bottom: 30px; /* 避开状态栏 */
+  width: 320px;
+  background: var(--panel);
+  border-left: 1px solid var(--line);
+  box-shadow: -4px 0 15px rgba(0,0,0,0.05);
+  display: flex;
+  flex-direction: column;
+  z-index: 10;
+}
+.drawer-head {
+  display: flex;
+  align-items: center;
+  padding: 8px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel-2);
+}
+.drawer-select {
+  flex: 1;
+  padding: 6px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  border-radius: 6px;
+  margin-right: 8px;
+  color: var(--text);
+  outline: none;
+}
+.drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  line-height: 1.6;
+  color: var(--text);
+}
+.drawer-content :deep(p) {
+  margin-bottom: 0.8em;
+}
+
+/* 动画 */
+.slide-enter-active,
+.slide-leave-active {
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+.slide-enter-from,
+.slide-leave-to {
+  transform: translateX(100%);
+  opacity: 0;
+}
+</style>

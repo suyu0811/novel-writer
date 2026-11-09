@@ -13,7 +13,8 @@ import {
   openBook,
   renameChapter,
   renameVolume,
-  selectChapter
+  selectChapter,
+  toggleSettingVolume // ★ 新增引入
 } from '../lib/book'
 import { createBook, deleteBook, library, moveBook, renameBook } from '../lib/library'
 import { actionSheet, confirmBox, promptBox, toast } from '../lib/ui'
@@ -92,7 +93,6 @@ function bookMenu(meta: BookMeta) {
       run: async () => {
         const current = app.book?.dir === meta.dir
         const newDir = await renameBook(meta)
-        // 正在编辑的书改完名字后，把打开状态同步到新目录，避免继续写回旧路径
         if (current && newDir) await openBook({ dir: newDir })
       }
     },
@@ -143,7 +143,8 @@ async function tapChapter(id: string) {
 function volMenu(volId: string) {
   const vol = app.book?.volumes.find((v) => v.id === volId)
   if (!vol) return
-  actionSheet(vol.title, [
+
+  const actions = [
     {
       label: '重命名分卷',
       run: async () => {
@@ -164,7 +165,18 @@ function volMenu(volId: string) {
         if (ok) deleteVolume(vol.id)
       }
     }
-  ])
+  ]
+
+  // ★ 新增：只有第一卷可以设为设定集
+  if (app.book?.volumes[0]?.id === vol.id) {
+    actions.unshift({
+      label: vol.isSetting ? '取消设定集卷' : '设为设定集卷',
+      hint: '设定集卷不会参与全书替换，且导出 txt 时会被过滤',
+      run: () => toggleSettingVolume(vol)
+    })
+  }
+
+  actionSheet(vol.title, actions)
 }
 
 function chapterMenu(volId: string, chId: string) {
@@ -416,7 +428,11 @@ defineExpose({ newBook })
               @click="!consumePress() && toggleVol(vol.id)"
             >
               <span class="drag" @pointerdown.stop="onDragDown($event, 'vol', vi)" @click.stop>⠿</span>
-              <span class="name">{{ vol.title }}</span>
+              <span class="name">
+                {{ vol.title }}
+                <!-- ★ 新增：如果是设定集，显示小书本图标 -->
+                <span v-if="vol.isSetting" title="设定集卷" style="color: var(--accent); margin-left: 4px;">📖</span>
+              </span>
               <span class="cnt">{{ vol.chapters.length }}</span>
               <button class="mini" title="新增章节" @click.stop="addChapter(vol.id)">＋</button>
             </div>

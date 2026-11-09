@@ -124,6 +124,12 @@ function setLineHeight(e: Event) {
   settings.lineHeight = Number((e.target as HTMLInputElement).value)
   saveSettings()
 }
+// ★ 新增：抽屉字号调节
+function setDrawerFontSize(e: Event) {
+  settings.drawerFontSize = Number((e.target as HTMLInputElement).value)
+  saveSettings()
+}
+
 function pickAccent(c: string) {
   settings.accent = c
   saveSettings()
@@ -246,6 +252,13 @@ async function remove(item: any) {
           <span class="fv">{{ settings.lineHeight.toFixed(2) }}</span>
         </div>
         
+        <!-- ★ 新增：抽屉字号调节 -->
+        <div class="field">
+          <span class="fl">抽屉字号</span>
+          <input type="range" min="10" max="30" step="1" :value="settings.drawerFontSize" @input="setDrawerFontSize" />
+          <span class="fv">{{ settings.drawerFontSize }}</span>
+        </div>
+
         <!-- ★ 新增：自定义字体导入 -->
         <div class="field">
           <span class="fl">本地字体</span>
