@@ -7,6 +7,8 @@ on:
 
 env:
   APP_NAME: 墨匣
+  ANDROID_HOME: ${{ github.workspace }}/android-sdk
+  ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
 
 jobs:
   android:
@@ -25,17 +27,35 @@ jobs:
           targets: aarch64-linux-android
 
       - uses: swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri
 
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
 
-      # ✅ 官方靠谱的 action，替换刚才那个不存在的
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      # 缓存 Android SDK
+      - name: Cache Android SDK
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.ANDROID_HOME }}
+          key: android-sdk-v1-platform34-build34.0.0
+
+      # 下载 cmdline-tools + 使用阿里镜像
+      - name: Install Android SDK
+        run: |
+          set -e
+          mkdir -p $ANDROID_HOME/cmdline-tools
+          cd $ANDROID_HOME/cmdline-tools
+          wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+          unzip -q commandlinetools-linux-11076708_latest.zip
+          mv cmdline-tools latest
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
+          # 使用阿里镜像
+          echo "sdkmanager.sdk=https://mirrors.aliyun.com/android/android/repository" > ~/.android/sdkmanager.cfg
+          yes | sdkmanager --licenses
+          yes | sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
 
       - uses: nttld/setup-ndk@v1
         with:
@@ -44,6 +64,14 @@ jobs:
 
       - name: 安装依赖
         run: npm install
+
+      # 【重点】把 gradle 源替换成阿里云，不然编译阶段还会炸
+      - name: Patch Gradle mirror
+        run: |
+          GRADLE_PROPS="src-tauri/gen/android/build.gradle"
+          if [ -f "$GRADLE_PROPS" ]; then
+            sed -i 's/maven { url "https:\/\/maven.google.com" }/maven { url "https:\/\/maven.aliyun.com\/repository\/google" }/g' "$GRADLE_PROPS"
+          fi
 
       - name: 编译 arm64 APK
         run: npx tauri android build --apk --target aarch64-linux-android
