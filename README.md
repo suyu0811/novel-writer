@@ -1,5 +1,5 @@
-# 墨匣 · 本地小说写作 App（v2）
-
+# 本地小说写作 App（v2）
+可更改软件名
 以「桔子写作」为蓝本的极简本地写作工具。**Tauri 2 + Vue 3 + Tiptap + Rust**，一套代码同时打包 Windows exe 与 Android APK。
 
 - 不联网、不登录、不云同步：整个 App 没有任何网络请求
