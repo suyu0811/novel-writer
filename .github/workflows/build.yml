@@ -6,9 +6,9 @@ on:
 
 env:
   APP_NAME: 墨匣
-  ANDROID_HOME: ${{ github.workspace }}/android-sdk
-  ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
-  NDK_HOME: ${{ github.workspace }}/android-sdk/ndk/26.1.10909125
+  # 不再覆盖 ANDROID_HOME，直接使用 Github Runner 自带的
+  # 指定 Runner 自带的 NDK 版本
+  NDK_HOME: /usr/local/lib/android/sdk/ndk/26.1.10909125
 
 jobs:
   android:
@@ -33,23 +33,17 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      # 使用官方维护的 android action，避开手写 yes 管道
-      - name: Setup Android SDK (Base)
-        uses: android-actions/setup-android@v3
-        with:
-          packages: "platform-tools,platforms;android-34,build-tools;34.0.0"
-
-      - name: Install NDK
+      # 环境检查（可选，如果 NDK 版本不对，看这里的输出）
+      - name: 检查 Android 环境
         run: |
-          echo "Installing NDK 26.1.10909125..."
-          # 使用 yes 自动接受许可协议
-          yes | sdkmanager --install "ndk;26.1.10909125" || true
-          # 确认 NDK 是否安装成功
-          ls -la $ANDROID_HOME/ndk
-          
+          echo "ANDROID_HOME: $ANDROID_HOME"
+          echo "可用的 NDK 版本:"
+          ls $ANDROID_HOME/ndk/
+
       - name: 安装依赖
         run: npm install
 
+      # 极其重要：如果没有这一步，Tauri 找不到安卓工程
       - name: Init Android 工程
         run: npx tauri android init --ci
 
@@ -59,11 +53,11 @@ jobs:
           BUILD_FILE="src-tauri/gen/android/build.gradle"
           for f in "$SETTINGS_FILE" "$BUILD_FILE"; do
             [ -f "$f" ] || continue
-            # Tauri 2 生成的通常是 google() 和 mavenCentral() 简写
+            # 替换 google() 和 mavenCentral() 为阿里镜像，加速 Gradle 下载依赖
             sed -i "s/google()/maven { url 'https:\/\/maven.aliyun.com\/repository\/google' }/g" "$f"
             sed -i "s/mavenCentral()/maven { url 'https:\/\/maven.aliyun.com\/repository\/public' }/g" "$f"
           done
-          # 顺手把 Gradle wrapper 指到腾讯镜像
+          # 替换 Gradle wrapper 为腾讯镜像
           WRAPPER="src-tauri/gen/android/gradle/wrapper/gradle-wrapper.properties"
           if [ -f "$WRAPPER" ]; then
             sed -i 's#distributionUrl=.*#distributionUrl=https\\://mirrors.cloud.tencent.com/gradle/gradle-8.9-bin.zip#' "$WRAPPER"
