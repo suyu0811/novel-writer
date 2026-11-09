@@ -9,8 +9,6 @@ env:
   APP_NAME: 墨匣
 
 jobs:
-  # ================= Windows =================
-  # 与 Android 完全独立：没有 needs，任何一个失败都不会拖住另一个
   windows:
     name: Windows 轻简包
     runs-on: windows-latest
@@ -33,52 +31,43 @@ jobs:
       - name: 安装依赖
         run: npm install
 
-      # targets 只有 nsis，这条命令产出单文件安装包（自带 WebView2 静默引导）
-      - name: 编译 + 打包 NSIS
+      - name: 编译 + NSIS
         run: npx tauri build --bundles nsis
 
-      # 便携版不依赖 bundle/portable（Tauri 没有这个 bundle 类型），
-      # 直接从 target/release 抓运行必需文件，缺文件只告警不失败
-      - name: 组装便携版 zip
+      - name: 打包便携版（直接取 release 文件）
         shell: pwsh
         run: |
           $rel = "src-tauri/target/release"
-          $out = "portable/${{ env.APP_NAME }}"
-          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          $outZip = "${{ env.APP_NAME }}-便携版.zip"
 
-          $copied = 0
-          Get-ChildItem -Path $rel -Filter *.exe -File | ForEach-Object {
-            Copy-Item $_.FullName "$out/"; $copied++
-          }
-          if (Test-Path "$rel/WebView2Loader.dll") {
-            Copy-Item "$rel/WebView2Loader.dll" "$out/"
-          }
-          if (Test-Path "$rel/resources") {
-            Copy-Item "$rel/resources" "$out/resources" -Recurse
+          $files = @()
+          $exe = Get-ChildItem "$rel" -Filter *.exe -File | Select-Object -First 1
+          if ($exe) { $files += $exe.FullName }
+          if (Test-Path "$rel/WebView2Loader.dll") { $files += "$rel/WebView2Loader.dll" }
+          if (Test-Path "$rel/resources") { $files += "$rel/resources" }
+
+          if ($files.Count -ge 2) {
+              Compress-Archive -Path $files -DestinationPath $outZip -Force
+              Write-Host "✅ 便携包生成成功"
+          } else {
+              Write-Host "::warning::缺少必要文件，跳过便携包，不报错终止"
+              exit 0
           }
 
-          if ($copied -eq 0) {
-            Write-Host "::warning::target/release 下没有找到 exe，便携版跳过"
-            exit 0
-          }
-          Compress-Archive -Path "$out/*" -DestinationPath "${{ env.APP_NAME }}-便携版.zip" -Force
-          Write-Host "便携版已生成"
-
-      - name: 上传 Windows 安装包
+      - name: 上传安装包
         uses: actions/upload-artifact@v4
         with:
           name: windows-安装包
           path: src-tauri/target/release/bundle/nsis/*.exe
           if-no-files-found: error
 
-      - name: 上传 Windows 便携版
+      - name: 上传便携包
         uses: actions/upload-artifact@v4
         with:
           name: windows-便携版
           path: ${{ env.APP_NAME }}-便携版.zip
           if-no-files-found: warn
 
-  # ================= Android =================
   android:
     name: Android arm64 签名包
     runs-on: ubuntu-latest
@@ -118,14 +107,10 @@ jobs:
       - name: 安装依赖
         run: npm install
 
-      # 只编译 arm64：现在几乎所有手机都是 arm64，体积比 universal 少一半以上
-      # tauri android build 会自动先跑 beforeBuildCommand（npm run build）
-      - name: 编译 Release APK
-        run: npx tauri android build --apk --target aarch64
+      - name: 编译 arm64 APK
+        run: npx tauri android build --apk --target aarch64-linux-android
 
-      # ---------- 自动签名 ----------
-      # 有 secret ANDROID_KEYSTORE_B64 就用固定证书；没有就现场生成一份并备份出来
-      - name: 准备签名证书
+      - name: 准备签名 keystore
         env:
           KS_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
         run: |
@@ -133,7 +118,6 @@ jobs:
           if [ -n "$KS_B64" ]; then
             echo "$KS_B64" | base64 -d > "$KS"
             echo "KS_PASS=${{ secrets.ANDROID_KEYSTORE_PASS }}" >> "$GITHUB_ENV"
-            echo "使用仓库 secret 里的固定证书"
           else
             keytool -genkeypair -keystore "$KS" -alias moxia \
               -keyalg RSA -keysize 2048 -validity 36500 \
@@ -142,14 +126,12 @@ jobs:
             echo "KS_PASS=moxia2026" >> "$GITHUB_ENV"
             echo "NEW_KS=1" >> "$GITHUB_ENV"
             base64 -w0 "$KS" > "$RUNNER_TEMP/keystore.b64"
-            echo "本次为新生成证书，产物里会附带 keystore 备份"
           fi
 
-      - name: zipalign + apksigner 签名
+      - name: Zipalign + Apksigner
         run: |
           BT="$ANDROID_HOME/build-tools/34.0.0"
-          UNSIGNED=$(find src-tauri/gen/android/app/build/outputs/apk -name "*-unsigned.apk" | head -1)
-          echo "待签名包: $UNSIGNED"
+          UNSIGNED=$(find src-tauri/gen/android/app/build/outputs/apk -name "*unsigned.apk" | head -1)
           "$BT/zipalign" -f -p 4 "$UNSIGNED" "$RUNNER_TEMP/aligned.apk"
           "$BT/apksigner" sign \
             --ks "$RUNNER_TEMP/release.keystore" \
@@ -157,18 +139,16 @@ jobs:
             --key-pass "pass:$KS_PASS" \
             --out "${{ env.APP_NAME }}-arm64.apk" \
             "$RUNNER_TEMP/aligned.apk"
-          "$BT/apksigner" verify --print-certs "${{ env.APP_NAME }}-arm64.apk" | head -4
-          ls -lh "${{ env.APP_NAME }}-arm64.apk"
+          "$BT/apksigner" verify "${{ env.APP_NAME }}-arm64.apk"
 
-      - name: 上传已签名 APK
+      - name: 上传签名 APK
         uses: actions/upload-artifact@v4
         with:
           name: android-apk
           path: ${{ env.APP_NAME }}-arm64.apk
           if-no-files-found: error
 
-      # 只在首次自动生成证书时出现，下载后填进 secret，以后签名才一致
-      - name: 上传证书备份（首次需要下载）
+      - name: 上传证书备份
         if: env.NEW_KS == '1'
         uses: actions/upload-artifact@v4
         with:
