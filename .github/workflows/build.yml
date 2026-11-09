@@ -48,7 +48,9 @@ jobs:
           echo "ANDROID_NDK_HOME=$NDK_DIR" >> $GITHUB_ENV
 
       - name: 安装依赖
-        run: npm install
+        run: |
+          npm install
+          npm install @tauri-apps/plugin-fs @tauri-apps/plugin-dialog @tauri-apps/plugin-store
 
       - name: Init Android 工程并赋权
         run: |
