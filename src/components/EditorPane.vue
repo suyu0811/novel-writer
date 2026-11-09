@@ -63,7 +63,8 @@ onMounted(() => {
     const ch = findChapter(app.activeChapterId)
     build(ch ? mdToHtml(ch.content) : '<p></p>')
   }
-  // ★ 新增：启动时应用本地字体
+  
+  // ★ 启动时应用本地字体
   const fontData = localStorage.getItem('custom_font_data')
   const fontName = localStorage.getItem('custom_font_name')
   if (fontData && fontName) {
@@ -231,8 +232,7 @@ function clearIndent() {
   font-family: var(--editor-custom-font, inherit); /* 调用自定义字体 */
 }
 
-/* 如果你原本这里没有写线格纸样式，需要去 main.css 里改。如果在这儿，用这个：
-   让下划线高度跟随行距和字号自动变化 */
+/* 让下划线高度跟随行距和字号自动变化 */
 .Ep :deep(.ProseMirror) {
   background-size: 100% calc(var(--editor-line-height, 1.8) * var(--editor-font-size, 18px)) !important;
   background-image: linear-gradient(transparent calc(var(--editor-line-height, 1.8) * var(--editor-font-size, 18px) - 1px), rgba(0,0,0,0.1) calc(var(--editor-line-height, 1.8) * var(--editor-font-size, 18px))) !important;
