@@ -14,7 +14,7 @@ import {
 } from '../lib/book'
 import { docToMd, mdToHtml } from '../lib/richtext'
 import { promptBox, toast } from '../lib/ui'
-import { settings, saveSettings } from '../lib/settings' // ★ 引入 saveSettings 用于关掉视觉缩进
+import { settings, saveSettings } from '../lib/settings'
 
 const editor = shallowRef<Editor | null>(null)
 const tick = ref(0)
@@ -64,7 +64,6 @@ onMounted(() => {
     build(ch ? mdToHtml(ch.content) : '<p></p>')
   }
   
-  // 启动时应用本地字体
   const fontData = localStorage.getItem('custom_font_data')
   const fontName = localStorage.getItem('custom_font_name')
   if (fontData && fontName) {
@@ -122,7 +121,7 @@ async function editTitle() {
   if (name) renameChapter(ch, name)
 }
 
-// ★ 全新的一键排版：只在段首插入全角空格，不乱动任何文字
+// ★ 安全的一键排版
 function oneClickFormat() {
   const e = editor.value
   if (!e) return
@@ -133,10 +132,9 @@ function oneClickFormat() {
   state.doc.descendants((node, pos) => {
     if (node.type.name === 'paragraph') {
       const text = node.textContent
-      // 如果段落有字，且不是以全角空格开头，则标记需要插入
       if (text.trim()) {
-        const cleaned = text.replace(/^[　 ]+/, '') // 先清空原来的段首空白
-        const newText = `　　${cleaned}` // 统一加两个全角空格
+        const cleaned = text.replace(/^[　 ]+/, '') 
+        const newText = `　　${cleaned}` 
         if (text !== newText) {
           targets.push({ from: pos + 1, to: pos + node.nodeSize - 1, text: newText })
         }
@@ -145,13 +143,10 @@ function oneClickFormat() {
   })
 
   if (targets.length > 0) {
-    // 从后往前替换，防止修改后节点位置偏移导致错乱
     targets.reverse().forEach(t => {
       tr.replaceWith(t.from, t.to, state.schema.text(t.text))
     })
     view.dispatch(tr)
-    
-    // 自动关掉视觉缩进，防止变成 4 个字符
     if (settings.indent) {
       settings.indent = false
       saveSettings()
@@ -162,7 +157,7 @@ function oneClickFormat() {
   }
 }
 
-// ★ 全新的一键清除缩进：只删除段首的空白字符
+// ★ 安全的一键清除缩进
 function clearIndent() {
   const e = editor.value
   if (!e) return
@@ -173,7 +168,6 @@ function clearIndent() {
   state.doc.descendants((node, pos) => {
     if (node.type.name === 'paragraph') {
       const text = node.textContent
-      // 匹配开头的所有全角或半角空格
       const match = text.match(/^[　 ]+/)
       if (match) {
         const newText = text.replace(/^[　 ]+/, '')
@@ -183,7 +177,6 @@ function clearIndent() {
   })
 
   if (targets.length > 0) {
-    // 同样从后往前删
     targets.reverse().forEach(t => {
       tr.replaceWith(t.from, t.to, state.schema.text(t.text))
     })
@@ -214,8 +207,7 @@ function clearIndent() {
       <button class="icon-btn" :class="{ on: isOn('blockquote') }" title="引用" @click="run((e) => e.chain().focus().toggleBlockquote().run())">❝</button>
       <button class="icon-btn" title="分割线" @click="run((e) => e.chain().focus().setHorizontalRule().run())">—</button>
       <span class="sep" />
-      <!-- 一键排版与清除缩进 -->
-      <button class="icon-btn" title="一键排版（首行缩进并去空行）" @click="oneClickFormat">排版</button>
+      <button class="icon-btn" title="一键排版" @click="oneClickFormat">排版</button>
       <button class="icon-btn" title="一键清除首行缩进" @click="clearIndent">除缩进</button>
       <span class="sep" />
       <button class="icon-btn" title="撤销" @click="run((e) => e.chain().focus().undo().run())">↺</button>
@@ -247,5 +239,3 @@ function clearIndent() {
     </div>
   </div>
 </template>
-
-<!-- ★ 移除了原来的 <style scoped>，因为 main.css 已经全局接管了线格纸和字体渲染 -->
