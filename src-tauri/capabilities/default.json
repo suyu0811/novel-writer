@@ -1,15 +1,17 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "墨匣默认权限：只用核心能力 + 文件选择对话框",
-  "windows": [
-    "main"
-  ],
+  "description": "墨匣默认权限",
+  "windows": ["main"],
   "permissions": [
     "core:default",
     "dialog:default",
     "dialog:allow-save",
     "dialog:allow-open",
-    "store:default"
+    "store:default",
+    "fs:default",
+    "fs:allow-read-text-file",
+    "fs:allow-write-text-file",
+    "fs:allow-write-file"
   ]
 }
