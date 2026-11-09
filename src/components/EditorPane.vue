@@ -14,7 +14,7 @@ import {
 } from '../lib/book'
 import { docToMd, mdToHtml } from '../lib/richtext'
 import { promptBox, toast } from '../lib/ui'
-import { settings } from '../lib/settings'
+import { settings, saveSettings } from '../lib/settings' // ★ 引入 saveSettings 用于关掉视觉缩进
 
 const editor = shallowRef<Editor | null>(null)
 const tick = ref(0)
@@ -64,7 +64,7 @@ onMounted(() => {
     build(ch ? mdToHtml(ch.content) : '<p></p>')
   }
   
-  // ★ 启动时应用本地字体
+  // 启动时应用本地字体
   const fontData = localStorage.getItem('custom_font_data')
   const fontName = localStorage.getItem('custom_font_name')
   if (fontData && fontName) {
@@ -122,53 +122,75 @@ async function editTitle() {
   if (name) renameChapter(ch, name)
 }
 
-// ★ 新增：一键排版
+// ★ 全新的一键排版：只在段首插入全角空格，不乱动任何文字
 function oneClickFormat() {
   const e = editor.value
   if (!e) return
   const { state, view } = e
   const tr = state.tr
-  let hasChanged = false
+  const targets: { from: number, to: number, text: string }[] = []
 
   state.doc.descendants((node, pos) => {
     if (node.type.name === 'paragraph') {
-      let text = node.textContent.trim()
-      if (text) {
-        // 强制增加两个全角空格进行缩进，同时去掉原有的多余首空格
-        const newText = `　　${text.replace(/^[　 ]+/, '')}`
-        tr.replaceWith(pos + 1, pos + node.nodeSize - 1, state.schema.text(newText))
-        hasChanged = true
+      const text = node.textContent
+      // 如果段落有字，且不是以全角空格开头，则标记需要插入
+      if (text.trim()) {
+        const cleaned = text.replace(/^[　 ]+/, '') // 先清空原来的段首空白
+        const newText = `　　${cleaned}` // 统一加两个全角空格
+        if (text !== newText) {
+          targets.push({ from: pos + 1, to: pos + node.nodeSize - 1, text: newText })
+        }
       }
     }
   })
-  if (hasChanged) {
+
+  if (targets.length > 0) {
+    // 从后往前替换，防止修改后节点位置偏移导致错乱
+    targets.reverse().forEach(t => {
+      tr.replaceWith(t.from, t.to, state.schema.text(t.text))
+    })
     view.dispatch(tr)
-    toast('排版完成')
+    
+    // 自动关掉视觉缩进，防止变成 4 个字符
+    if (settings.indent) {
+      settings.indent = false
+      saveSettings()
+    }
+    toast('排版完成：已添加实际缩进字符')
+  } else {
+    toast('文本已是标准排版状态')
   }
 }
 
-// ★ 新增：一键清除缩进
+// ★ 全新的一键清除缩进：只删除段首的空白字符
 function clearIndent() {
   const e = editor.value
   if (!e) return
   const { state, view } = e
   const tr = state.tr
-  let hasChanged = false
+  const targets: { from: number, to: number, text: string }[] = []
 
   state.doc.descendants((node, pos) => {
     if (node.type.name === 'paragraph') {
-      let text = node.textContent
-      // 清除段首的全角空格或普通空格
-      if (text.startsWith('　　') || text.startsWith('  ')) {
+      const text = node.textContent
+      // 匹配开头的所有全角或半角空格
+      const match = text.match(/^[　 ]+/)
+      if (match) {
         const newText = text.replace(/^[　 ]+/, '')
-        tr.replaceWith(pos + 1, pos + node.nodeSize - 1, state.schema.text(newText))
-        hasChanged = true
+        targets.push({ from: pos + 1, to: pos + node.nodeSize - 1, text: newText })
       }
     }
   })
-  if (hasChanged) {
+
+  if (targets.length > 0) {
+    // 同样从后往前删
+    targets.reverse().forEach(t => {
+      tr.replaceWith(t.from, t.to, state.schema.text(t.text))
+    })
     view.dispatch(tr)
-    toast('已清除段首缩进')
+    toast('已清除段首缩进字符')
+  } else {
+    toast('没有需要清除的缩进')
   }
 }
 </script>
@@ -192,7 +214,7 @@ function clearIndent() {
       <button class="icon-btn" :class="{ on: isOn('blockquote') }" title="引用" @click="run((e) => e.chain().focus().toggleBlockquote().run())">❝</button>
       <button class="icon-btn" title="分割线" @click="run((e) => e.chain().focus().setHorizontalRule().run())">—</button>
       <span class="sep" />
-      <!-- ★ 新增：一键排版与清除缩进 -->
+      <!-- 一键排版与清除缩进 -->
       <button class="icon-btn" title="一键排版（首行缩进并去空行）" @click="oneClickFormat">排版</button>
       <button class="icon-btn" title="一键清除首行缩进" @click="clearIndent">除缩进</button>
       <span class="sep" />
@@ -226,15 +248,4 @@ function clearIndent() {
   </div>
 </template>
 
-<style scoped>
-/* ★ 新增：动态字体绑定和线格纸自适应 */
-:deep(.ProseMirror) {
-  font-family: var(--editor-custom-font, inherit); /* 调用自定义字体 */
-}
-
-/* 让下划线高度跟随行距和字号自动变化 */
-.Ep :deep(.ProseMirror) {
-  background-size: 100% calc(var(--editor-line-height, 1.8) * var(--editor-font-size, 18px)) !important;
-  background-image: linear-gradient(transparent calc(var(--editor-line-height, 1.8) * var(--editor-font-size, 18px) - 1px), rgba(0,0,0,0.1) calc(var(--editor-line-height, 1.8) * var(--editor-font-size, 18px))) !important;
-}
-</style>
+<!-- ★ 移除了原来的 <style scoped>，因为 main.css 已经全局接管了线格纸和字体渲染 -->
