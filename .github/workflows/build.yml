@@ -19,10 +19,10 @@ jobs:
           node-version: 22
           cache: npm
 
-      # 补全所有的安卓 Rust 目标，防止 Gradle 尝试编译其他架构时报错
+      # 只安装 arm64 的 Rust 目标，避免多余的编译尝试
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-linux-android, armv7-linux-androideabi, i686-linux-android, x86_64-linux-android
+          targets: aarch64-linux-android
 
       - uses: swatinem/rust-cache@v2
 
@@ -33,8 +33,6 @@ jobs:
 
       - name: 动态探测并配置 Android NDK 环境变量
         run: |
-          echo "Runner 自带的 NDK 目录如下："
-          ls $ANDROID_HOME/ndk/
           NDK_DIR=$(ls -d $ANDROID_HOME/ndk/* | head -n 1)
           if [ -z "$NDK_DIR" ]; then
             echo "错误：未在机器上找到自带的 NDK！"
@@ -47,11 +45,17 @@ jobs:
       - name: 安装依赖
         run: npm install
 
-      # 赋予 gradlew 执行权限
       - name: Init Android 工程并赋权
         run: |
           npx tauri android init --ci
           chmod +x src-tauri/gen/android/gradlew
+          
+          # 强制修改 app 的 build.gradle，限制只编译 arm64-v8a
+          BUILD_GRADLE="src-tauri/gen/android/app/build.gradle"
+          if [ -f "$BUILD_GRADLE" ]; then
+            # 将 Tauri 默认包含的多种架构过滤为仅 arm64
+            sed -i 's/abiFilters .*$/abiFilters "arm64-v8a"/g' "$BUILD_GRADLE"
+          fi
 
       - name: Patch Gradle 阿里镜像
         run: |
@@ -59,13 +63,10 @@ jobs:
           BUILD_FILE="src-tauri/gen/android/build.gradle"
           for f in "$SETTINGS_FILE" "$BUILD_FILE"; do
             [ -f "$f" ] || continue
+            # 只替换 maven 仓库地址，绝不改 Gradle 的 distributionUrl 版本！
             sed -i "s/google()/maven { url 'https:\/\/maven.aliyun.com\/repository\/google' }/g" "$f"
             sed -i "s/mavenCentral()/maven { url 'https:\/\/maven.aliyun.com\/repository\/public' }/g" "$f"
           done
-          WRAPPER="src-tauri/gen/android/gradle/wrapper/gradle-wrapper.properties"
-          if [ -f "$WRAPPER" ]; then
-            sed -i 's#distributionUrl=.*#distributionUrl=https\\://mirrors.cloud.tencent.com/gradle/gradle-8.9-bin.zip#' "$WRAPPER"
-          fi
 
       - name: 编译 arm64 APK
         run: npx tauri android build --apk --target aarch64
@@ -92,9 +93,14 @@ jobs:
         run: |
           BT_VERSION=$(ls $ANDROID_HOME/build-tools/ | sort -V | tail -n 1)
           BT="$ANDROID_HOME/build-tools/$BT_VERSION"
-          echo "使用 Build Tools: $BT"
           
+          # 查找 Tauri 生成的 unsigned 包
           UNSIGNED=$(find src-tauri/gen/android/app/build/outputs/apk -name "*unsigned.apk" | head -1)
+          if [ -z "$UNSIGNED" ]; then
+            echo "错误：找不到生成的 unsigned APK，请检查编译日志！"
+            exit 1
+          fi
+          
           "$BT/zipalign" -f -p 4 "$UNSIGNED" "$RUNNER_TEMP/aligned.apk"
           "$BT/apksigner" sign \
             --ks "$RUNNER_TEMP/release.keystore" \
