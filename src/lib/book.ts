@@ -1,5 +1,7 @@
 import { computed, reactive } from 'vue'
 import { strToU8, zipSync } from 'fflate'
+import { save } from '@tauri-apps/plugin-dialog' // ★ 新增
+import { getDefaultExportDir } from '@/utils/exportDir' // ★ 新增
 import type { ArchiveItem, Book, BookMeta, Chapter, ExportKind, Volume } from './types'
 import { parseBook, serializeBook, toPlainText } from './md'
 import { countWords, uid } from './text'
@@ -10,7 +12,6 @@ import {
   mkdir,
   normalizePath,
   pickFile,
-  pickSavePath,
   readText,
   removePath,
   writeBytes,
@@ -339,7 +340,6 @@ async function writeArchive(kind: 'auto' | 'manual'): Promise<boolean> {
   return true
 }
 
-/** 自动存档：编辑过程中每隔一段时间打一份，最多留 5 份 */
 export async function autoArchive() {
   if (!app.book || !app.dirty) return
   await saveNow()
@@ -350,7 +350,6 @@ export async function autoArchive() {
   await refreshArchives()
 }
 
-/** 手动存档：先落盘，再存一份手动档，然后删掉所有自动存档 */
 export async function manualArchive(): Promise<void> {
   const b = app.book
   if (!b) return
@@ -428,9 +427,30 @@ export async function exportBook(kind: ExportKind) {
 async function doExport(b: Book, kind: ExportKind) {
   await saveNow()
   const stem = safeName(b.title)
-  const path = await pickSavePath(stem, kind)
+  
+  // ★ 获取设置里保存的默认导出目录
+  let defaultDir = await getDefaultExportDir()
+  
+  // ★ 组装完整的默认路径（含文件名）
+  const ext = `.${kind}`
+  let defaultPath = stem + ext
+  if (defaultDir) {
+    const sep = defaultDir.includes('\\') ? '\\' : '/'
+    defaultPath = defaultDir.replace(/[\\/]$/, '') + sep + stem + ext
+  }
+
+  // ★ 唤起系统级的“另存为”弹窗
+  const path = await save({
+    defaultPath: defaultPath,
+    filters: [{
+      name: kind.toUpperCase(),
+      extensions: [kind]
+    }]
+  })
+
   if (!path) return
 
+  // ★ 写入文件
   if (kind === 'md') {
     await writeText(path, serializeBook(b))
   } else if (kind === 'txt') {
