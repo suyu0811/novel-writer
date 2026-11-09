@@ -64,14 +64,10 @@ jobs:
           find src-tauri/gen/android/app/build/outputs/apk -name "*.apk"
 
       - name: Upload Debug APK
-        id: upload-apk
         uses: actions/upload-artifact@v4
         with:
           name: android-debug-apk
           path: src-tauri/gen/android/app/build/outputs/apk/**/debug/*.apk
-
-      - name: Print APK download URL
-        run: echo "Debug APK: ${{ steps.upload-apk.outputs.artifact-url }}"
 
   build-windows:
     name: Build Windows full release folder
@@ -104,11 +100,7 @@ jobs:
         run: npx tauri build --no-bundle
 
       - name: Upload entire release directory
-        id: upload-win
         uses: actions/upload-artifact@v4
         with:
           name: windows-full-release
           path: src-tauri/target/release/
-
-      - name: Print Windows artifact URL
-        run: echo "Windows 完整包 URL: ${{ steps.upload-win.outputs.artifact-url }}"
