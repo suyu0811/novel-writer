@@ -487,27 +487,23 @@ html:not(.indent) .Ep .ProseMirror p {
 }
 
 /* =======================================================
-   ★ 终极稿纸：段落级铺线（折行有线，回车空行有线，文末干净）
+   ★ 终极兼容版稿纸：完美避开安卓 WebView 的兼容性 Bug
    ======================================================= */
 /* 1. 移除最外层全屏画线，保证文末干净 */
 html.ruled .Ep .ProseMirror {
   background-image: none !important;
 }
 
-/* 2. 针对每一个段落内部无限铺线 */
+/* 2. 针对每一个段落内部铺线 */
 html.ruled .Ep .ProseMirror p {
   margin: 0 !important; /* 取消段落间距，保证上下线绝对等距 */
   padding: 0 !important;
   line-height: var(--line-h) !important;
   
-  background-image: repeating-linear-gradient(
-    to bottom,
-    transparent 0px,
-    transparent calc(var(--line-h) - 1px),
-    var(--rule) calc(var(--line-h) - 1px),
-    var(--rule) var(--line-h)
-  ) !important;
+  /* ★ 核心修改：用 linear-gradient 画底部单线，然后用 repeat-y 纵向平铺 */
+  background-image: linear-gradient(to bottom, transparent calc(100% - 1px), var(--rule) 100%) !important;
   background-size: 100% var(--line-h) !important;
+  background-repeat: repeat-y !important;
   background-position: 0 0 !important;
 }
 
@@ -518,14 +514,9 @@ html.ruled .Ep .ProseMirror li p {
 }
 html.ruled .Ep .ProseMirror li {
   line-height: var(--line-h) !important;
-  background-image: repeating-linear-gradient(
-    to bottom,
-    transparent 0px,
-    transparent calc(var(--line-h) - 1px),
-    var(--rule) calc(var(--line-h) - 1px),
-    var(--rule) var(--line-h)
-  ) !important;
+  background-image: linear-gradient(to bottom, transparent calc(100% - 1px), var(--rule) 100%) !important;
   background-size: 100% var(--line-h) !important;
+  background-repeat: repeat-y !important;
 }
 /* ======================================================= */
 

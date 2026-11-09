@@ -47,7 +47,10 @@ export function serializeBook(book: Book): string {
 
   const chunks: string[] = [head]
   for (const vol of book.volumes) {
-    chunks.push(`# ${vol.title}`.trimEnd(), '')
+    // ★ 修复：保存时，如果是设定集，在前面加上暗号 [设定集]
+    const prefix = vol.isSetting ? '[设定集] ' : ''
+    chunks.push(`# ${prefix}${vol.title}`.trimEnd(), '')
+    
     for (const ch of vol.chapters) {
       chunks.push(`## ${ch.title}`.trimEnd(), '')
       const body = ch.content.replace(/\r\n/g, '\n').trim()
@@ -166,6 +169,15 @@ export function parseBook(text: string, fallbackTitle = '未命名书稿'): Book
   const preface = lines.slice(prefaceStart, prefaceEnd).join('\n').trim()
 
   volHeads.forEach((vh, vi) => {
+    // ★ 修复：读取时，识别并去除 [设定集] 暗号
+    let volTitle = vh.h.title
+    let isSetting = false
+    const prefix = '[设定集] '
+    if (volTitle.startsWith(prefix)) {
+      isSetting = true
+      volTitle = volTitle.slice(prefix.length).trim()
+    }
+
     const volEnd =
       vi + 1 < volHeads.length ? volHeads[vi + 1].h.line : lines.length
     const childHeads = heads
@@ -196,7 +208,8 @@ export function parseBook(text: string, fallbackTitle = '未命名书稿'): Book
       chapters.push({ id: uid(), title: '正文', content: volBody })
     }
 
-    volumes.push({ id: uid(), title: vh.h.title, chapters })
+    // ★ 修复：将 isSetting 存入 Volume
+    volumes.push({ id: uid(), title: volTitle, chapters, isSetting })
   })
 
   if (preface) {
