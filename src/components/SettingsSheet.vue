@@ -18,7 +18,6 @@ const emit = defineEmits<{ (e: 'close'): void }>()
 
 const accents = ['#8a6a4f', '#3f6f5b', '#4a5f8a', '#8a4a56', '#5b5468', '#2f2f2f']
 
-// 自定义取色
 const customAccent = ref(settings.accent)
 function applyCustomAccent() {
   pickAccent(customAccent.value)
@@ -28,8 +27,7 @@ function applyCustomAccent() {
 const appDisplayName = ref(localStorage.getItem('app_display_name') || '墨匣')
 function saveAppName() {
   localStorage.setItem('app_display_name', appDisplayName.value)
-  // 强制刷新页面让顶栏生效，或者通过事件通知 App.vue
-  location.reload()
+  toast('名称已保存，返回即可看到')
 }
 
 // ★ 新增：本地字体导入
@@ -59,7 +57,6 @@ function applyCustomFont(data: string, name: string) {
   }
 }
 
-// 默认导出目录
 const exportDir = ref('')
 async function refreshExportPath() {
   exportDir.value = await getDefaultExportDir()
@@ -210,7 +207,7 @@ async function remove(item: any) {
         <!-- ★ 新增：更换软件名 -->
         <div class="field">
           <span class="fl">软件名称</span>
-          <input type="text" v-model="appDisplayName" @change="saveAppName" style="flex:1; padding: 4px; border-radius: 4px; border:1px solid #ccc;" />
+          <input type="text" v-model="appDisplayName" @change="saveAppName" style="flex:1; padding: 6px; border-radius: 4px; border:1px solid #ccc; outline:none;" />
         </div>
 
         <div class="group-title">存储</div>
@@ -285,7 +282,6 @@ async function remove(item: any) {
           <div class="sw" :class="{ on: settings.serif }"><i /></div>
         </div>
 
-        <!-- ... 存档记录和关于部分保持原样，不需要动 ... -->
         <div class="group-title">存档记录</div>
         <div v-if="archives.items.length" class="arch-list">
           <div v-for="it in archives.items" :key="it.name" class="arch-row">
@@ -297,6 +293,15 @@ async function remove(item: any) {
           </div>
         </div>
         <div v-else class="tip">还没有存档。编辑时每 10 分钟自动存档（最多 5 份），点顶部「存档」可手动存档。</div>
+        <div class="tip" v-if="archives.items.length">
+          自动存档 {{ autoCount }} 份 · 手动存档 {{ manualCount }} 份（手动存档后自动档会被清空）
+        </div>
+
+        <div class="group-title">关于</div>
+        <div class="tip" style="margin: 0">
+          所有正文是纯 Markdown（book.md），放在你设置的根目录下，一本一个文件夹。
+          不加密、不上传、无需账号。换设备时把整个根目录拷过去，或者用「导入」逐个读入。
+        </div>
       </div>
     </div>
   </div>
