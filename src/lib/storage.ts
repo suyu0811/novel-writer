@@ -43,23 +43,48 @@ export function dirName(p: string): string {
 const LS = (k: string) => 'mw:' + k
 
 export async function readText(path: string): Promise<string> {
-  if (isTauri()) return invoke<string>('fs_read_text', { path })
+  if (isTauri()) {
+    // ★ 核心修复：如果是安卓系统弹窗返回的 content:// 路径，使用前端 fs 插件读取
+    if (path.startsWith('content://')) {
+      const { readTextFile } = await import('@tauri-apps/plugin-fs')
+      return await readTextFile(path)
+    }
+    return invoke<string>('fs_read_text', { path })
+  }
   return localStorage.getItem(LS(path)) ?? ''
 }
 
 /** 只读文件头若干字节，用于快速取书名，避免整本读取 */
 export async function readHead(path: string, bytes = 400): Promise<string> {
-  if (isTauri()) return invoke<string>('fs_read_head', { path, bytes })
+  if (isTauri()) {
+    if (path.startsWith('content://')) {
+      const { readTextFile } = await import('@tauri-apps/plugin-fs')
+      const text = await readTextFile(path)
+      return text.slice(0, bytes)
+    }
+    return invoke<string>('fs_read_head', { path, bytes })
+  }
   return (localStorage.getItem(LS(path)) ?? '').slice(0, bytes)
 }
 
 export async function writeText(path: string, content: string): Promise<void> {
-  if (isTauri()) return invoke('fs_write_text', { path, content })
+  if (isTauri()) {
+    // ★ 核心修复：如果是安卓 content:// 路径，使用前端 fs 插件写入
+    if (path.startsWith('content://')) {
+      const { writeTextFile } = await import('@tauri-apps/plugin-fs')
+      return await writeTextFile(path, content)
+    }
+    return invoke('fs_write_text', { path, content })
+  }
   localStorage.setItem(LS(path), content)
 }
 
 export async function writeBytes(path: string, bytes: Uint8Array): Promise<void> {
   if (isTauri()) {
+    if (path.startsWith('content://')) {
+      const { writeFile } = await import('@tauri-apps/plugin-fs')
+      return await writeFile(path, bytes)
+    }
     return invoke('fs_write_bytes', { path, bytes: Array.from(bytes) })
   }
   const blob = new Blob([bytes as BlobPart], { type: 'application/zip' })
@@ -74,7 +99,6 @@ export async function exists(path: string): Promise<boolean> {
   if (isTauri()) return invoke<boolean>('fs_exists', { path })
   const key = LS(path)
   if (localStorage.getItem(key) !== null) return true
-  // 目录本身没有键，只要下面有文件就算存在
   const prefix = key + '/'
   for (let i = 0; i < localStorage.length; i++) {
     if ((localStorage.key(i) || '').startsWith(prefix)) return true
@@ -88,7 +112,6 @@ export async function mkdir(path: string): Promise<void> {
 
 export async function listDir(path: string): Promise<DirEntry[]> {
   if (isTauri()) return invoke<DirEntry[]>('fs_list', { path })
-  // 浏览器预览：从 localStorage 的键里反推出目录与文件
   const out: DirEntry[] = []
   const base = normalizePath(path)
   const dirs = new Set<string>()
@@ -115,7 +138,6 @@ export async function removePath(path: string): Promise<void> {
     localStorage.removeItem(key)
     return
   }
-  // 目录：只删这个目录下的键，前缀必须带斜杠，避免「乙」误删「乙改」
   const prefix = key + '/'
   const keys: string[] = []
   for (let i = 0; i < localStorage.length; i++) {
