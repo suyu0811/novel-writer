@@ -8,6 +8,8 @@ env:
   APP_NAME: 墨匣
   ANDROID_HOME: ${{ github.workspace }}/android-sdk
   ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
+  NDK_HOME: ${{ github.workspace }}/android-sdk/ndk/27.1.12297006
+  ANDROID_NDK_HOME: ${{ github.workspace }}/android-sdk/ndk/27.1.12297006
 
 jobs:
   android:
@@ -38,23 +40,26 @@ jobs:
         with:
           packages: "platform-tools,platforms;android-34,build-tools;34.0.0"
 
-      - uses: nttld/setup-ndk@v1
-        with:
-          ndk-version: r27b
-          link-to-sdk: true
-
       - name: 安装依赖
         run: npm install
 
+      - name: Init Android 工程
+        run: npx tauri android init --ci
+
       - name: Patch Gradle 阿里镜像
         run: |
-          GRADLE_FILE="src-tauri/gen/android/build.gradle"
           SETTINGS_FILE="src-tauri/gen/android/settings.gradle"
-          if [ -f "$GRADLE_FILE" ]; then
-            sed -i 's/maven { url "https:\/\/maven.google.com" }/maven { url "https:\/\/maven.aliyun.com\/repository\/google" }/g' "$GRADLE_FILE"
-          fi
-          if [ -f "$SETTINGS_FILE" ]; then
-            sed -i 's/maven { url "https:\/\/maven.google.com" }/maven { url "https:\/\/maven.aliyun.com\/repository\/google" }/g' "$SETTINGS_FILE"
+          BUILD_FILE="src-tauri/gen/android/build.gradle"
+          # Tauri 模板里是 google() / mavenCentral() 简写，不是完整 URL
+          for f in "$SETTINGS_FILE" "$BUILD_FILE"; do
+            [ -f "$f" ] || continue
+            sed -i "s/google()/maven { url 'https:\/\/maven.aliyun.com\/repository\/google' }/g" "$f"
+            sed -i "s/mavenCentral()/maven { url 'https:\/\/maven.aliyun.com\/repository\/public' }/g" "$f"
+          done
+          # 顺手把 Gradle wrapper 指到腾讯镜像，避免下载 Gradle 发行版崩溃
+          WRAPPER="src-tauri/gen/android/gradle/wrapper/gradle-wrapper.properties"
+          if [ -f "$WRAPPER" ]; then
+            sed -i 's#distributionUrl=.*#distributionUrl=https\\://mirrors.cloud.tencent.com/gradle/gradle-8.9-bin.zip#' "$WRAPPER"
           fi
 
       - name: 编译 arm64 APK
