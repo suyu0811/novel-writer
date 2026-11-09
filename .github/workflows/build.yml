@@ -6,7 +6,7 @@ on:
 
 jobs:
   build-android:
-    name: Build Android APK
+    name: Build Android Debug APK
     runs-on: ubuntu-latest
     steps:
       - name: Checkout source
@@ -35,8 +35,8 @@ jobs:
       - name: Setup JDK 17
         uses: actions/setup-java@v4
         with:
-          distribution: temurin
-          java-version: 17
+          java-version: '17'
+          distribution: 'temurin'
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
@@ -50,29 +50,32 @@ jobs:
       - name: Setup NDK
         uses: nttld/setup-ndk@v1
         with:
-          ndk-version: r26d
+          ndk-version: r27b
           link-to-sdk: true
 
-      - name: Install npm deps
+      - name: Install dependencies
         run: npm install
 
-      - name: Tauri Android init & build
+      - name: Build Android Debug
         run: |
           npx tauri android init
-          npx tauri android build
-          echo "=== List all generated APK ==="
+          npx tauri android build --debug
+          echo "==== APK list ===="
           find src-tauri/gen/android/app/build/outputs/apk -name "*.apk"
 
-      - name: Upload APK
+      - name: Upload Debug APK
+        id: upload-apk
         uses: actions/upload-artifact@v4
         with:
-          name: android-apk
-          path: src-tauri/gen/android/app/build/outputs/apk/**/release/*.apk
+          name: android-debug-apk
+          path: src-tauri/gen/android/app/build/outputs/apk/**/debug/*.apk
+
+      - name: Print APK download URL
+        run: echo "Debug APK: ${{ steps.upload-apk.outputs.artifact-url }}"
 
   build-windows:
-    name: Build Windows bare EXE
+    name: Build Windows full release folder
     runs-on: windows-latest
-    # 容错开关：就算 Windows 编译炸了，也不阻止整个 workflow 收尾，制品正常展示
     continue-on-error: true
     steps:
       - name: Checkout source
@@ -94,14 +97,18 @@ jobs:
         with:
           workspaces: src-tauri
 
-      - name: Install npm deps
+      - name: Install dependencies
         run: npm install
 
-      - name: Build bare exe，跳过 NSIS 安装包
+      - name: Compile (no bundle)
         run: npx tauri build --no-bundle
 
-      - name: Upload bare Windows exe
+      - name: Upload entire release directory
+        id: upload-win
         uses: actions/upload-artifact@v4
         with:
-          name: windows-bare-exe
-          path: src-tauri/target/release/*.exe
+          name: windows-full-release
+          path: src-tauri/target/release/
+
+      - name: Print Windows artifact URL
+        run: echo "Windows 完整包 URL: ${{ steps.upload-win.outputs.artifact-url }}"
