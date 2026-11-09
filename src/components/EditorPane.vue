@@ -13,7 +13,7 @@ import {
   totalWords
 } from '../lib/book'
 import { docToMd, mdToHtml } from '../lib/richtext'
-import { promptBox } from '../lib/ui'
+import { promptBox, toast } from '../lib/ui'
 import { settings } from '../lib/settings'
 
 const editor = shallowRef<Editor | null>(null)
@@ -63,6 +63,18 @@ onMounted(() => {
     const ch = findChapter(app.activeChapterId)
     build(ch ? mdToHtml(ch.content) : '<p></p>')
   }
+  // ★ 新增：启动时应用本地字体
+  const fontData = localStorage.getItem('custom_font_data')
+  const fontName = localStorage.getItem('custom_font_name')
+  if (fontData && fontName) {
+    try {
+      const font = new FontFace(fontName, `url(${fontData})`)
+      font.load().then((loaded) => {
+        document.fonts.add(loaded)
+        document.documentElement.style.setProperty('--editor-custom-font', `"${fontName}", system-ui`)
+      })
+    } catch (e) { console.error(e) }
+  }
 })
 
 onBeforeUnmount(() => {
@@ -108,6 +120,56 @@ async function editTitle() {
   const name = await promptBox('重命名章节', ch.title)
   if (name) renameChapter(ch, name)
 }
+
+// ★ 新增：一键排版
+function oneClickFormat() {
+  const e = editor.value
+  if (!e) return
+  const { state, view } = e
+  const tr = state.tr
+  let hasChanged = false
+
+  state.doc.descendants((node, pos) => {
+    if (node.type.name === 'paragraph') {
+      let text = node.textContent.trim()
+      if (text) {
+        // 强制增加两个全角空格进行缩进，同时去掉原有的多余首空格
+        const newText = `　　${text.replace(/^[　 ]+/, '')}`
+        tr.replaceWith(pos + 1, pos + node.nodeSize - 1, state.schema.text(newText))
+        hasChanged = true
+      }
+    }
+  })
+  if (hasChanged) {
+    view.dispatch(tr)
+    toast('排版完成')
+  }
+}
+
+// ★ 新增：一键清除缩进
+function clearIndent() {
+  const e = editor.value
+  if (!e) return
+  const { state, view } = e
+  const tr = state.tr
+  let hasChanged = false
+
+  state.doc.descendants((node, pos) => {
+    if (node.type.name === 'paragraph') {
+      let text = node.textContent
+      // 清除段首的全角空格或普通空格
+      if (text.startsWith('　　') || text.startsWith('  ')) {
+        const newText = text.replace(/^[　 ]+/, '')
+        tr.replaceWith(pos + 1, pos + node.nodeSize - 1, state.schema.text(newText))
+        hasChanged = true
+      }
+    }
+  })
+  if (hasChanged) {
+    view.dispatch(tr)
+    toast('已清除段首缩进')
+  }
+}
 </script>
 
 <template>
@@ -128,6 +190,10 @@ async function editTitle() {
       <button class="icon-btn" :class="{ on: isOn('orderedList') }" title="有序列表" @click="run((e) => e.chain().focus().toggleOrderedList().run())">1.</button>
       <button class="icon-btn" :class="{ on: isOn('blockquote') }" title="引用" @click="run((e) => e.chain().focus().toggleBlockquote().run())">❝</button>
       <button class="icon-btn" title="分割线" @click="run((e) => e.chain().focus().setHorizontalRule().run())">—</button>
+      <span class="sep" />
+      <!-- ★ 新增：一键排版与清除缩进 -->
+      <button class="icon-btn" title="一键排版（首行缩进并去空行）" @click="oneClickFormat">排版</button>
+      <button class="icon-btn" title="一键清除首行缩进" @click="clearIndent">除缩进</button>
       <span class="sep" />
       <button class="icon-btn" title="撤销" @click="run((e) => e.chain().focus().undo().run())">↺</button>
       <button class="icon-btn" title="重做" @click="run((e) => e.chain().focus().redo().run())">↻</button>
@@ -158,3 +224,17 @@ async function editTitle() {
     </div>
   </div>
 </template>
+
+<style scoped>
+/* ★ 新增：动态字体绑定和线格纸自适应 */
+:deep(.ProseMirror) {
+  font-family: var(--editor-custom-font, inherit); /* 调用自定义字体 */
+}
+
+/* 如果你原本这里没有写线格纸样式，需要去 main.css 里改。如果在这儿，用这个：
+   让下划线高度跟随行距和字号自动变化 */
+.Ep :deep(.ProseMirror) {
+  background-size: 100% calc(var(--editor-line-height, 1.8) * var(--editor-font-size, 18px)) !important;
+  background-image: linear-gradient(transparent calc(var(--editor-line-height, 1.8) * var(--editor-font-size, 18px) - 1px), rgba(0,0,0,0.1) calc(var(--editor-line-height, 1.8) * var(--editor-font-size, 18px))) !important;
+}
+</style>
