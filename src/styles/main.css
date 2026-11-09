@@ -12,7 +12,7 @@
   --shadow: 0 8px 30px rgba(40, 32, 24, 0.14);
   --editor-size: 17px;
   --editor-lh: 1.9;
-  /* ★ 新增：自定义字体变量，初始为空 */
+  /* 自定义字体变量，初始为空 */
   --editor-custom-font: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
   /* 计算每行的高度，用于横格纸和行距 */
   --line-h: calc(var(--editor-size) * var(--editor-lh));
@@ -468,7 +468,6 @@ textarea {
 
 .Ep .ProseMirror {
   outline: none;
-  /* ★ 修改：优先使用自定义字体 */
   font-family: var(--editor-custom-font);
   font-size: var(--editor-size);
   line-height: var(--editor-lh);
@@ -477,7 +476,7 @@ textarea {
   caret-color: var(--accent);
 }
 
-/* ★ 修改：视觉首行缩进控制 */
+/* 视觉首行缩进控制 */
 html.indent .Ep .ProseMirror p {
   text-indent: 2em;
 }
@@ -490,28 +489,32 @@ html:not(.indent) .Ep .ProseMirror p {
   word-break: break-word;
 }
 
-/* ★ 核心修复：线格纸适配字号与行距 */
+/* =======================================================
+   ★ 终极修复：线格纸完美适配字体，不再穿模错位
+   ======================================================= */
 html.ruled .Ep .ProseMirror {
-  background-image: repeating-linear-gradient(
-    to bottom,
-    transparent 0,
-    transparent calc(var(--line-h) - 1px),
-    var(--rule) calc(var(--line-h) - 1px),
-    var(--rule) var(--line-h)
-  );
-  /* 背景高度严格等于行高，保证不同字号下绝对对齐 */
-  background-size: 100% var(--line-h);
-  background-position: 0 0;
-  /* 使用 background-attachment: local 让背景跟随滚动 */
-  background-attachment: local; 
+  background-image: none !important; /* 移除原有的背景画线 */
 }
-/* 线格纸模式下，去除段落间距，否则会导致横线错位 */
+
 html.ruled .Ep .ProseMirror p {
   margin: 0;
+  line-height: var(--line-h) !important;
+  border-bottom: 1px solid var(--rule) !important; /* 直接给段落底部画线 */
+  box-sizing: border-box;
 }
+
 html.ruled .Ep .ProseMirror li p {
   margin: 0;
+  line-height: var(--line-h) !important;
+  border-bottom: none !important;
 }
+
+html.ruled .Ep .ProseMirror li {
+  line-height: var(--line-h) !important;
+  border-bottom: 1px solid var(--rule) !important;
+}
+
+/* ======================================================= */
 
 .Ep .ProseMirror p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);
