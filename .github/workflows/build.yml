@@ -1,10 +1,11 @@
-name: Build APK Only
+name: Build Both Apps
+
 on:
   workflow_dispatch:
   push:
     branches: [main]
 
-    # ★ 新增：自动取消旧任务，只保留最新一次构建
+# 自动取消旧的构建，只跑最新一次
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -13,24 +14,20 @@ env:
   APP_NAME: 墨匣
 
 jobs:
-  android:
-    name: Android arm64 签名包
+  # ================= 安卓打包 =================
+  build-android:
+    name: 打包 Android APK
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-
-      # 只安装 arm64 的 Rust 目标，避免多余的编译尝试
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-linux-android
-
       - uses: swatinem/rust-cache@v2
-
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -56,11 +53,8 @@ jobs:
         run: |
           npx tauri android init --ci
           chmod +x src-tauri/gen/android/gradlew
-          
-          # 强制修改 app 的 build.gradle，限制只编译 arm64-v8a
           BUILD_GRADLE="src-tauri/gen/android/app/build.gradle"
           if [ -f "$BUILD_GRADLE" ]; then
-            # 将 Tauri 默认包含的多种架构过滤为仅 arm64
             sed -i 's/abiFilters .*$/abiFilters "arm64-v8a"/g' "$BUILD_GRADLE"
           fi
 
@@ -70,64 +64,69 @@ jobs:
           BUILD_FILE="src-tauri/gen/android/build.gradle"
           for f in "$SETTINGS_FILE" "$BUILD_FILE"; do
             [ -f "$f" ] || continue
-            # 只替换 maven 仓库地址，绝不改 Gradle 的 distributionUrl 版本！
             sed -i "s/google()/maven { url 'https:\/\/maven.aliyun.com\/repository\/google' }/g" "$f"
             sed -i "s/mavenCentral()/maven { url 'https:\/\/maven.aliyun.com\/repository\/public' }/g" "$f"
           done
 
-      - name: 编译 arm64 APK
+      - name: 编译 Android APK
         run: npx tauri android build --apk --target aarch64
 
-      - name: 准备签名 keystore
+      - name: 准备签名
         env:
           KS_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
         run: |
           KS="$RUNNER_TEMP/release.keystore"
           if [ -n "$KS_B64" ]; then
             echo "$KS_B64" | base64 -d > "$KS"
-            echo "KS_PASS=${{ secrets.ANDROID_KEYSTORE_PASS }}" >> "$GITHUB_ENV"
+            echo "KS_PASS=${{ secrets.ANDROID_KEYSTORE_PASS }}" >> $GITHUB_ENV
           else
-            keytool -genkeypair -keystore "$KS" -alias moxia \
-              -keyalg RSA -keysize 2048 -validity 36500 \
-              -storepass moxia2026 -keypass moxia2026 \
-              -dname "CN=MoXia,O=MoXia,C=CN" > /dev/null 2>&1
-            echo "KS_PASS=moxia2026" >> "$GITHUB_ENV"
-            echo "NEW_KS=1" >> "$GITHUB_ENV"
-            base64 -w0 "$KS" > "$RUNNER_TEMP/keystore.b64"
+            keytool -genkeypair -keystore "$KS" -alias moxia -keyalg RSA -keysize 2048 -validity 36500 -storepass moxia2026 -keypass moxia2026 -dname "CN=MoXia,O=MoXia,C=CN" > /dev/null 2>&1
+            echo "KS_PASS=moxia2026" >> $GITHUB_ENV
           fi
 
-      - name: Zipalign + Apksigner
+      - name: 签名
         run: |
           BT_VERSION=$(ls $ANDROID_HOME/build-tools/ | sort -V | tail -n 1)
           BT="$ANDROID_HOME/build-tools/$BT_VERSION"
-          
-          # 查找 Tauri 生成的 unsigned 包
           UNSIGNED=$(find src-tauri/gen/android/app/build/outputs/apk -name "*unsigned.apk" | head -1)
-          if [ -z "$UNSIGNED" ]; then
-            echo "错误：找不到生成的 unsigned APK，请检查编译日志！"
-            exit 1
-          fi
-          
           "$BT/zipalign" -f -p 4 "$UNSIGNED" "$RUNNER_TEMP/aligned.apk"
-          "$BT/apksigner" sign \
-            --ks "$RUNNER_TEMP/release.keystore" \
-            --ks-pass "pass:$KS_PASS" \
-            --key-pass "pass:$KS_PASS" \
-            --out "${{ env.APP_NAME }}-arm64.apk" \
-            "$RUNNER_TEMP/aligned.apk"
-          "$BT/apksigner" verify "${{ env.APP_NAME }}-arm64.apk"
+          "$BT/apksigner" sign --ks "$RUNNER_TEMP/release.keystore" --ks-pass "pass:$KS_PASS" --key-pass "pass:$KS_PASS" --out "${{ env.APP_NAME }}-Android.apk" "$RUNNER_TEMP/aligned.apk"
 
-      - name: 上传签名 APK
+      # ★ 将安卓包上传到统一命名的 Artifact
+      - name: 上传安装包
         uses: actions/upload-artifact@v4
         with:
-          name: android-apk
-          path: ${{ env.APP_NAME }}-arm64.apk
+          name: ${{ env.APP_NAME }}-全平台安装包
+          path: ${{ env.APP_NAME }}-Android.apk
           if-no-files-found: error
 
-      - name: 上传证书备份
-        if: env.NEW_KS == '1'
+
+  # ================= Windows (EXE) 打包 =================
+  build-windows:
+    name: 打包 Windows EXE
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+
+      - name: 安装依赖
+        run: |
+          npm install
+          npm install @tauri-apps/plugin-fs @tauri-apps/plugin-dialog @tauri-apps/plugin-store
+
+      - name: 编译 Windows EXE
+        run: npx tauri build
+
+      # ★ 将 Windows 包上传到同一个 Artifact 名字中（会自动合并）
+      - name: 上传安装包
         uses: actions/upload-artifact@v4
         with:
-          name: keystore-备份
-          path: ${{ runner.temp }}/keystore.b64
-          if-no-files-found: warn
+          name: ${{ env.APP_NAME }}-全平台安装包
+          # 匹配 nsis 目录下的 exe 安装程序（如果你需要绿色版，可以改为 path: src-tauri/target/release/*.exe）
+          path: src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error
