@@ -6,9 +6,7 @@ on:
 
 env:
   APP_NAME: 墨匣
-  # 不再覆盖 ANDROID_HOME，直接使用 Github Runner 自带的
-  # 指定 Runner 自带的 NDK 版本
-  NDK_HOME: /usr/local/lib/android/sdk/ndk/26.1.10909125
+  # 不要在这里写死 NDK_HOME，让脚本自己找
 
 jobs:
   android:
@@ -33,17 +31,29 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      # 环境检查（可选，如果 NDK 版本不对，看这里的输出）
-      - name: 检查 Android 环境
+      # ================= 核心修改点 =================
+      - name: 动态探测并配置 Android NDK 环境变量
         run: |
-          echo "ANDROID_HOME: $ANDROID_HOME"
-          echo "可用的 NDK 版本:"
+          echo "Runner 自带的 NDK 目录如下："
           ls $ANDROID_HOME/ndk/
+          
+          # 自动获取第一个存在的 NDK 路径（或者挑最新的）
+          NDK_DIR=$(ls -d $ANDROID_HOME/ndk/* | head -n 1)
+          
+          if [ -z "$NDK_DIR" ]; then
+            echo "错误：未在机器上找到自带的 NDK！"
+            exit 1
+          fi
+          
+          echo "探测到 NDK 路径为: $NDK_DIR"
+          # 将找到的路径写入环境变量，供后续的 Tauri 使用
+          echo "NDK_HOME=$NDK_DIR" >> $GITHUB_ENV
+          echo "ANDROID_NDK_HOME=$NDK_DIR" >> $GITHUB_ENV
+      # ==============================================
 
       - name: 安装依赖
         run: npm install
 
-      # 极其重要：如果没有这一步，Tauri 找不到安卓工程
       - name: Init Android 工程
         run: npx tauri android init --ci
 
@@ -53,11 +63,9 @@ jobs:
           BUILD_FILE="src-tauri/gen/android/build.gradle"
           for f in "$SETTINGS_FILE" "$BUILD_FILE"; do
             [ -f "$f" ] || continue
-            # 替换 google() 和 mavenCentral() 为阿里镜像，加速 Gradle 下载依赖
             sed -i "s/google()/maven { url 'https:\/\/maven.aliyun.com\/repository\/google' }/g" "$f"
             sed -i "s/mavenCentral()/maven { url 'https:\/\/maven.aliyun.com\/repository\/public' }/g" "$f"
           done
-          # 替换 Gradle wrapper 为腾讯镜像
           WRAPPER="src-tauri/gen/android/gradle/wrapper/gradle-wrapper.properties"
           if [ -f "$WRAPPER" ]; then
             sed -i 's#distributionUrl=.*#distributionUrl=https\\://mirrors.cloud.tencent.com/gradle/gradle-8.9-bin.zip#' "$WRAPPER"
@@ -84,9 +92,13 @@ jobs:
             base64 -w0 "$KS" > "$RUNNER_TEMP/keystore.b64"
           fi
 
+      # 注意：这里我把 build-tools 的路径也改成了动态获取，防止版本不对报错
       - name: Zipalign + Apksigner
         run: |
-          BT="$ANDROID_HOME/build-tools/34.0.0"
+          BT_VERSION=$(ls $ANDROID_HOME/build-tools/ | sort -V | tail -n 1)
+          BT="$ANDROID_HOME/build-tools/$BT_VERSION"
+          echo "使用 Build Tools: $BT"
+          
           UNSIGNED=$(find src-tauri/gen/android/app/build/outputs/apk -name "*unsigned.apk" | head -1)
           "$BT/zipalign" -f -p 4 "$UNSIGNED" "$RUNNER_TEMP/aligned.apk"
           "$BT/apksigner" sign \
